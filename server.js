@@ -53,3 +53,38 @@ function buildLevel(seed = 7) {
   return { holds, gaps, width: CONFIG.width, top: CONFIG.top };
 }
 
+// ---------------------------------------------------------------- game state
+const COLORS = ['#ff5a5f', '#3ec1d3', '#ffd23f', '#7bd389', '#c77dff', '#ff9f1c', '#f5f5f5', '#4d96ff'];
+// first color nobody has, so leaving + rejoining never gives two climbers the same color
+const freeColor = () => { const used = new Set([...climbers.values()].map(c => c.color)); return COLORS.find(c => !used.has(c)) || COLORS[climbers.size % COLORS.length]; };
+// collision layers: torsos bump the world, torsos and feet; arms/legs only the world; feet also stand on holds
+const CAT = { WORLD: 0x1, TORSO: 0x2, ARM: 0x4, HOLD: 0x8, FOOT: 0x10 };
+let world, ground, level;
+let climbers = new Map(); // climber id -> climber (one body, driven by 1-2 players or a bot)
+let players = new Map();  // socket id -> { id, name, climberId, role: 'arms' | 'legs' }
+let phase = 'lobby';      // lobby | playing | results
+let winner = null;
+let events = [];
+let roundStart = 0;
+let seq = 0;
+
+function now() { return Date.now(); }
+function emitEvent(type, data) { events.push({ type, ...data }); }
+
+function resetWorld() {
+  world = new World({ gravity: Vec2(0, -CONFIG.gravity) });
+  ground = world.createBody();
+  const W = CONFIG.width, T = CONFIG.top + 6;
+  // thick boxes, not thin edges: a hard landing can poke a foot through an edge and trap it underneath
+  ground.createFixture(new Box(W / 2 + 2, 1, Vec2(W / 2, -1), 0), { friction: 0.8 });
+  ground.createFixture(new Box(1, T / 2, Vec2(-1, T / 2), 0), { friction: 0.2 });
+  ground.createFixture(new Box(1, T / 2, Vec2(W + 1, T / 2), 0), { friction: 0.2 });
+  level = buildLevel();
+  // holds are solid only to feet: you can stand on them, hands grab them by distance
+  for (const h of level.holds) {
+    const f = ground.createFixture(new Circle(Vec2(h.x, h.y), 0.12), { friction: 1.2, filterCategoryBits: CAT.HOLD, filterMaskBits: CAT.FOOT });
+    f.setUserData({ hold: h.id });
+  }
+  for (const c of climbers.values()) { c.body = null; c.hands = []; c.legs = []; }
+}
+
