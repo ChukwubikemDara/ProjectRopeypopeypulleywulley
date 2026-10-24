@@ -638,13 +638,18 @@ function step() {
 function botThink(c, t) {
   c.braceInput = true;
   const p = c.body.getPosition();
-  if (!c.target || c.target.y < p.y || t > c.targetUntil) {
-    const options = level.holds.filter(h => h.y > p.y + 0.6 && h.y < p.y + 2.6);
+  // aim for a reachable hold further along the course (some randomness so bots don't move in lockstep)
+  if (!c.target || t > c.targetUntil || c.target.brokenUntil > t || progressAt(c.target.x, c.target.y) <= c.progress) {
+    const options = level.holds.filter(h => h.brokenUntil <= t && Math.hypot(h.x - p.x, h.y - p.y) < 3.2 && progressAt(h.x, h.y) > c.progress + 0.004)
+      .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y)).slice(0, 3);
     c.target = options[Math.floor(Math.random() * options.length)] || null;
-    c.targetUntil = t + 4000;
+    c.targetUntil = t + 3500;
   }
-  c.aim = c.target ? Math.max(-1, Math.min(1, (c.target.x - p.x) / 1.5)) * 0.8 : 0;
-  c.legAim = c.aim * 0.5;
+  // no hold in reach: just head along the course
+  const tx = c.target ? c.target.x - p.x : 1.5, ty = c.target ? c.target.y - p.y : 0.5;
+  c.aim = Math.max(-1, Math.min(1, tx / 1.5)) * 0.8;
+  c.ay = Math.max(-1, Math.min(1, ty / 1.2));
+  c.legAim = Math.max(-1, Math.min(1, tx / 2));
   // bots are both players: hands stay closed. Hanging for a bit? Hop, then let go a beat later
   // (the combo) and grab again on the way up. Holding a person too long? Drop them. Bots are not loyal.
   for (const h of c.hands) {
