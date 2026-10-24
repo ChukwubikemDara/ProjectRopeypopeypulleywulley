@@ -447,3 +447,101 @@ function poseClimber(o, c, dt) {
   o.label.visible = !(mode === 'phone' && c.id === Net.me);
 }
 
+// ---------------------------------------------------------------- banners + shake (DOM overlay)
+const banners = document.createElement('div');
+banners.id = 'banners';
+document.body.appendChild(banners);
+function banner(msg, color) {
+  const d = document.createElement('div');
+  d.className = 'banner'; d.textContent = msg; d.style.color = color;
+  d.style.setProperty('--tilt', (Math.random() * 8 - 4) + 'deg');
+  banners.appendChild(d);
+  setTimeout(() => d.remove(), 1600);
+}
+let shake = 0;
+Net.on('event', (ev) => {
+  const me = Net.me, phone = mode === 'phone';
+  const involves = (...ids) => ids.includes(me);
+  const n = (id) => Net.nameOf(id);
+  let msg = null, color = '#ffffff', sh = 0;
+  switch (ev.type) {
+    case 'drop': if (!phone || involves(ev.id, ev.victim)) { msg = phone ? (ev.id === me ? 'BETRAYAL!' : `${n(ev.id)} DROPPED YOU`) : `${n(ev.id)} dropped ${n(ev.victim)}`; color = '#ff5a5f'; sh = ev.victim === me ? 0.25 : 0.08; } break;
+    case 'throw': if (!phone || involves(ev.id, ev.target)) { msg = phone ? (ev.id === me ? 'YEET!' : 'THROWN!') : `${n(ev.id)} threw ${n(ev.target)}`; color = '#7bd389'; } break;
+    case 'yank': if (!phone || involves(ev.id, ev.target)) { msg = phone ? (ev.id === me ? (ev.held ? 'THEY HELD ON' : 'YANKED!') : (ev.held ? 'YOU HELD ON' : `${n(ev.id)} YANKED YOU`)) : `${n(ev.id)} yanked ${n(ev.target)}`; color = '#c77dff'; sh = ev.target === me ? 0.2 : 0; } break;
+    case 'shake': if (!phone || involves(ev.id, ev.victim)) { msg = phone ? (ev.id === me ? (ev.held ? 'THEY HELD ON' : 'SHOOK THEM OFF') : (ev.held ? 'YOU HELD ON' : `${n(ev.id)} SHOOK YOU OFF`)) : `${n(ev.id)} shook off ${n(ev.victim)}`; color = '#c77dff'; } break;
+    case 'handhold': if (!phone || involves(ev.id, ev.target)) { msg = phone ? 'HOLDING HANDS' : `${n(ev.id)} grabbed ${n(ev.target)}'s hand`; color = '#ffd23f'; } break;
+    case 'boost': if (!phone || involves(ev.id, ev.by)) { msg = phone ? (ev.id === me ? 'BOOST!' : `${n(ev.id)} USED YOU`) : `${n(ev.id)} boosted off ${n(ev.by)}`; color = '#7bd389'; } break;
+    case 'fall': if (!phone || involves(ev.id)) { msg = phone ? `-${ev.m} m` : `${n(ev.id)} fell ${ev.m} m`; color = '#ffd23f'; sh = ev.id === me ? 0.2 : 0.05; } break;
+    case 'slip': if (phone && involves(ev.id)) { msg = { exhausted: 'TOO TIRED', yanked: 'YANKED OFF' }[ev.reason] || 'RIPPED OFF'; color = '#ff5a5f'; sh = 0.25; } break;
+    case 'win': msg = `${n(ev.id)} WINS`; color = '#ffd23f'; sh = 0.2; break;
+    case 'combo': if (!phone) { msg = `${n(ev.id)} COMBO!`; color = '#ffd23f'; sh = 0.12; } break;
+    case 'kick': if (!phone || involves(ev.id, ev.target)) { msg = phone ? (ev.id === me ? (ev.held ? 'THEY HELD ON' : 'KICKED THEM OFF') : `${n(ev.id)} KICKED YOU`) : `${n(ev.id)} kicked ${n(ev.target)}`; color = '#ff9f1c'; sh = ev.target === me ? 0.2 : 0.06; } break;
+  }
+  if (msg) banner(msg, color);
+  shake = Math.max(shake, sh);
+});
+
+// ---------------------------------------------------------------- camera
+const cam = { x: 0, y: 3, d: 14 };
+function frame(st, dt) {
+  const vw = innerWidth, vh = innerHeight;
+  const tanH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  let tx = 0, ty = 4, td = 14;
+  if (mode === 'phone') {
+    const me = st && (st.climbers.find(c => c.id === Net.me) || st.climbers[0]);
+    td = 10.5 * Math.max(1, 0.62 / camera.aspect); // portrait phones need to back off to see ~5 m across
+    if (me) { tx = wx(me.x); ty = me.y + 0.1; }     // you sit mid-screen, clear of the hand pads
+    camera.clearViewOffset();
+  } else {
+    const inset = (document.getElementById('side')?.offsetWidth || 0) + 16;
+    const aspect = (vw - inset) / vh;
+    let lo = 0, hi = 8;
+    if (st && st.climbers.length) { const ys = st.climbers.map(c => c.y); lo = Math.min(...ys) - 1.5; hi = Math.max(...ys) + 2.5; }
+    const span = Math.max(7, hi - lo);
+    td = Math.max(span / 2 / tanH, 5.5 / (tanH * aspect)) + 1;  // fit the climbers and ~11 m of wall width
+    const xs = st && st.climbers.length ? st.climbers.map(c => wx(c.x)) : [0];
+    tx = Math.max(-3, Math.min(3, (Math.min(...xs) + Math.max(...xs)) / 2)); ty = (lo + hi) / 2;
+    camera.setViewOffset(vw, vh, -inset / 2, 0, vw, vh); // center the cliff in the space right of the side panel
+  }
+  ty = Math.max(ty, mode === 'screen' ? td * tanH - 1.6 : 1.2); // never let the water take over the bottom of the view
+  const k = 1 - Math.pow(0.02, dt);
+  cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k; cam.d += (td - cam.d) * k;
+  const sx = (Math.random() - 0.5) * shake, sy = (Math.random() - 0.5) * shake;
+  shake = Math.max(0, shake - dt * 0.8);
+  camera.position.set(cam.x + 1.4 + sx, cam.y + 0.6 + sy, cam.d);
+  camera.lookAt(cam.x + sx, cam.y + 0.4 + sy, 0);
+  // the sun's shadow box follows the view so shadows stay crisp
+  const ext = Math.min(40, cam.d * tanH * Math.max(1, vw / vh) + 3);
+  sunLight.target.position.set(cam.x, cam.y, 0);
+  sunLight.position.copy(sunLight.target.position).addScaledVector(sun, 40);
+  Object.assign(sunLight.shadow.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: 1, far: 120 });
+  sunLight.shadow.camera.updateProjectionMatrix();
+}
+
+// ---------------------------------------------------------------- loop
+if (Net.level) buildLevel(Net.level);
+Net.on('level', buildLevel);
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+let last = performance.now();
+renderer.setAnimationLoop(() => {
+  const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now;
+  const st = Net.sample();
+  const seen = new Set();
+  if (st && level) for (const c of st.climbers) {
+    let o = climberObjs.get(c.id);
+    if (!o || o.name !== Net.nameOf(c.id)) { if (o) scene.remove(o.g); o = makeClimber(c.id); climberObjs.set(c.id, o); }
+    poseClimber(o, c, dt);
+    seen.add(c.id);
+  }
+  for (const [id, o] of climberObjs) if (!seen.has(id)) { scene.remove(o.g); climberObjs.delete(id); }
+  waterNormal.offset.set(now / 60000, now / 90000);
+  if (flag) {
+    const p = flag.geometry.attributes.position, b = flag.userData.base;
+    for (let i = 0; i < p.count; i++) { const x = b[i * 3]; p.setZ(i, Math.sin(now / 220 - x * 4) * 0.12 * x); }
+    p.needsUpdate = true; flag.geometry.computeVertexNormals();
+  }
+  frame(st, dt);
+  renderer.render(scene, camera);
+});
+window.Render3D = { scene, camera, renderer };
