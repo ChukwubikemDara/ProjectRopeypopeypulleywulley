@@ -14,7 +14,7 @@
   <div class="tag">four friends · eight hands · zero trust</div>
   <div id="qrBox">
     <img id="qr" alt="Join QR code">
-    <div class="fine center" id="joinUrl"></div>
+    <div class="fine center"><b>Scan to join</b> · <span id="joinUrl"></span></div>
   </div>
   <div class="card">
     <div class="row between"><b>Climbers</b><span class="fine" id="count"></span></div>
@@ -22,6 +22,7 @@
   </div>
   <div class="row gap">
     <button id="startBtn" class="big">Start round</button>
+    <button id="endBtn" class="ghost hidden">End round</button>
   </div>
   <div class="row gap">
     <button id="botBtn" class="ghost">+ Bot</button>
@@ -55,6 +56,7 @@
   $('startBtn').onclick = $('againBtn').onclick = () => socket.emit('start');
   $('botBtn').onclick = () => socket.emit('addBot');
   $('clearBots').onclick = () => socket.emit('clearBots');
+  $('endBtn').onclick = () => socket.emit('endRound');
   const toggleTune = () => $('tune').classList.toggle('hidden');
   $('tuneBtn').onclick = toggleTune;
   addEventListener('keydown', e => { if (e.key.toLowerCase() === 'd') toggleTune(); });
@@ -64,7 +66,12 @@
       : c.members.map(m => `<span class="member">${esc(m.name)} <em>${m.role === 'both' ? 'arms+legs' : m.role}</em></span>`).join('')}</div></li>`).join('');
     $('count').textContent = r.length + ' joined';
   });
-  Net.on('phase', p => { if (p === 'playing') $('results').classList.add('hidden'); document.body.classList.toggle('playing', p === 'playing'); });
+  Net.on('phase', p => {
+    if (p === 'playing') $('results').classList.add('hidden');
+    document.body.classList.toggle('playing', p === 'playing');
+    $('startBtn').textContent = p === 'playing' ? 'Restart' : 'Start round';
+    $('endBtn').classList.toggle('hidden', p !== 'playing');
+  });
   Net.on('results', (awards) => {
     $('results').classList.remove('hidden');
     const win = awards.find(a => a.val === 'summit');
@@ -83,7 +90,7 @@
     boost: (e) => `⤒ ${Net.nameOf(e.id)} stood on ${Net.nameOf(e.by)}`,
     save: (e) => `🛟 ${Net.nameOf(e.id)} is carrying someone`,
     fall: (e) => `↓ ${Net.nameOf(e.id)} fell ${e.m}m`,
-    combo: (e) => `⚡ ${Net.nameOf(e.id)} pulled + pushed in sync`,
+    combo: (e) => `⚡ ${Net.nameOf(e.id)} hopped + let go in sync`,
     kick: (e) => `👟 ${Net.nameOf(e.id)} kicked ${Net.nameOf(e.target)}${e.held ? ' (held on)' : ''}`,
   };
   Net.on('event', (e) => {

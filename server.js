@@ -678,6 +678,12 @@ io.on('connection', (socket) => {
   });
   socket.on('gesture', (g, power) => { const p = players.get(socket.id); if (p) onGesture(p, g, power); });
   socket.on('start', () => { if (climbers.size >= 1) startRound(); });
+  // back to the lobby without a winner (e.g. a round nobody is finishing)
+  socket.on('endRound', () => {
+    if (phase !== 'playing') return;
+    for (const c of climbers.values()) removeClimberBodies(c);
+    phase = 'lobby'; winner = null;
+  });
   socket.on('addBot', () => {
     const id = 'bot' + (++seq);
     climbers.set(id, { id, bot: true, name: 'Bot ' + seq, color: freeColor(), aim: 0, hands: [], legs: [] });

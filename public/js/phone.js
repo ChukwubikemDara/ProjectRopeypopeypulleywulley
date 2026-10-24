@@ -86,6 +86,7 @@
   function enterPhase(p) {
     if (!joined) return;
     show('results', false);
+    if (p === 'lobby') { show('hud', false); show('lobby', true); $('waitNote').textContent = ''; return; }
     if (p === 'playing') setTimeout(() => {
       const playing = inRound();
       show('lobby', !playing); show('hud', playing);

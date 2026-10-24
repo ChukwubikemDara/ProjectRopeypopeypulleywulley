@@ -103,7 +103,10 @@ body.screen .logo { font-size: 44px; }
 #qrBox { background: #fff; border-radius: 14px; padding: 12px; }
 #qrBox img { width: 100%; display: block; }
 #qrBox .fine { color: #333; font-weight: 700; margin-top: 4px; }
-body.screen.playing #qrBox { display: none; }
+/* mid-round the QR stays (people join between rounds), just smaller and side by side with its caption */
+body.screen.playing #qrBox { display: flex; align-items: center; gap: 10px; padding: 8px; }
+body.screen.playing #qrBox img { width: 96px; }
+body.screen.playing #qrBox .fine { margin: 0; text-align: left; }
 #feed { display: flex; flex-direction: column; gap: 6px; font-weight: 700; font-size: 15px; overflow: hidden; }
 #feed div { background: var(--card); padding: 8px 10px; border-radius: 10px; animation: pop 0.25s ease-out; }
 @keyframes pop { from { transform: scale(0.9); opacity: 0; } }
