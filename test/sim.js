@@ -129,6 +129,19 @@ server.listen(PORT, async () => {
   const x0 = A().body.getPosition().x; await wait(400);
   check(A().body.getPosition().x - x0 > 0.4, `arms tilt steers the falling body (${(A().body.getPosition().x - x0).toFixed(2)} m right)`);
 
+  // ---- jumping past holds: a trailing foot must not snag under a hold (holds are one-way for feet)
+  {
+    let snags = 0;
+    for (const h of level.holds.filter(h => h.y > 1.5 && h.y < 2.5)) {
+      for (const p of [a1, a2]) p.s.emit('input', { aim: 0, ay: 0.6, l: false, r: false, brace: true });
+      place(A(), h.x, 1.0); await wait(400);
+      A().cdPush = 0; a2.s.emit('gesture', 'flick', 1);
+      let prev = 0;
+      for (let i = 0; i < 30; i++) { await wait(16); const vy = A().body.getLinearVelocity().y; if (prev > 3 && prev - vy > 1.2) snags++; prev = vy; }
+    }
+    check(snags === 0, `jumping up past holds never snags a foot (${snags} sudden stops)`);
+  }
+
   // ---- holding hands + betrayal: B hangs off A's hand, A lets go -> a drop
   for (const p of [a1, a2, b1, b2]) p.s.emit('input', { l: false, r: false, brace: true });
   await wait(300);
