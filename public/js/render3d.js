@@ -353,3 +353,97 @@ function buildLevel(L) {
   levelGroup.add(pole, flag, summitText);
 }
 
+// ---------------------------------------------------------------- climbers
+const climberObjs = new Map();
+const cyl = new THREE.CylinderGeometry(1, 1, 1, 10);
+const sph = new THREE.SphereGeometry(1, 16, 12);
+const UP = new THREE.Vector3(0, 1, 0);
+function limb(mesh, a, b, rad) {
+  const d = new THREE.Vector3().subVectors(b, a), len = Math.max(0.001, d.length());
+  mesh.position.copy(a).addScaledVector(d, 0.5);
+  mesh.quaternion.setFromUnitVectors(UP, d.divideScalar(len));
+  mesh.scale.set(rad, len, rad);
+}
+function makeClimber(id) {
+  const color = new THREE.Color(Net.colorOf(id));
+  const shirt = new THREE.MeshStandardMaterial({ color, roughness: 0.75 });
+  const pants = new THREE.MeshStandardMaterial({ color: color.clone().multiplyScalar(0.35), roughness: 0.9 });
+  const shoe = new THREE.MeshStandardMaterial({ color: 0x2a2522, roughness: 0.8 });
+  const g = new THREE.Group();
+  const add = (geo, mat) => { const m = new THREE.Mesh(geo, mat); m.castShadow = true; g.add(m); return m; };
+  const o = {
+    g, color,
+    chest: add(new THREE.CapsuleGeometry(0.21, 0.3, 6, 12), shirt),
+    hips: add(new THREE.CapsuleGeometry(0.17, 0.1, 6, 12), pants),
+    neck: add(cyl, skinMat),
+    head: add(sph, skinMat),
+    hat: add(new THREE.SphereGeometry(1, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), shirt),
+    arms: [0, 1].map(() => ({ up: add(cyl, shirt), fore: add(cyl, skinMat), elbow: add(sph, skinMat), hand: add(sph, skinMat) })),
+    legs: [0, 1].map(() => ({ thigh: add(cyl, pants), shin: add(cyl, pants), knee: add(sph, pants), foot: add(new THREE.BoxGeometry(0.12, 0.08, 0.24), shoe) })),
+    label: textSprite(Net.nameOf(id), { size: 52, color: '#' + color.getHexString(), scale: 0.85 }),
+    name: Net.nameOf(id),
+    vx: 0, vy: 0, px: null, py: null,
+  };
+  g.add(o.label);
+  scene.add(g);
+  return o;
+}
+const V = (x, y, z) => new THREE.Vector3(x, y, z);
+function poseClimber(o, c, dt) {
+  if (o.px !== null) { o.vx += ((c.x - o.px) / dt - o.vx) * 0.2; o.vy += ((c.y - o.py) / dt - o.vy) * 0.2; }
+  o.px = c.x; o.py = c.y;
+  const X = wx(c.x), Y = c.y, Z = 0.18;           // body sits a little in front of the wall
+  const cfg = Net.config || {};
+  const shX = cfg.shoulderX || 0.22, shY = cfg.shoulderY || 0.12;
+  const lean = Math.max(-0.35, Math.min(0.35, o.vx * 0.04));
+
+  o.chest.scale.set(1, 1, 0.8);
+  o.chest.position.set(X + lean * 0.15, Y + 0.04, Z); o.chest.rotation.set(0, 0, -lean * 0.4);
+  o.hips.position.set(X - lean * 0.1, Y - 0.3, Z); o.hips.scale.set(1.05, 1, 0.85);
+  const headP = V(X + lean * 0.35, Y + 0.48, Z - 0.03);
+  limb(o.neck, V(X + lean * 0.2, Y + 0.28, Z), headP, 0.06);
+  o.head.position.copy(headP); o.head.scale.setScalar(0.15);
+  o.hat.position.copy(headP).add(V(0, 0.02, 0.01)); o.hat.scale.setScalar(0.158); o.hat.rotation.set(-0.25, 0, 0);
+
+  // arms: shoulder -> elbow -> hand straight from the physics, hands reach into the wall
+  c.hands.forEach((h, i) => {
+    const s = i ? 1 : -1, a = o.arms[i];
+    const sh = V(X + s * shX + lean * 0.2, Y + shY + 0.06, Z);
+    const hz = h.grip && !h.onClimber ? -0.02 : 0.08;
+    const el = V(wx(h.ex), h.ey, (Z + hz) / 2 + 0.08);
+    const hand = V(wx(h.x), h.y, hz);
+    limb(a.up, sh, el, 0.075); limb(a.fore, el, hand, 0.06);
+    a.elbow.position.copy(el); a.elbow.scale.setScalar(0.065);
+    a.hand.position.copy(hand);
+    const k = h.closed || h.grip ? 0.075 : 0.085;
+    a.hand.scale.set(k, h.closed || h.grip ? k : k * 1.3, k * 0.8);
+  });
+
+  // legs: straight from the physics (hip -> knee -> foot); knees bow toward the camera a little for depth
+  if (c.legs) for (let i = 0; i < 2; i++) {
+    const s = i ? 1 : -1, l = o.legs[i], lg = c.legs[i];
+    const hip = V(X + s * (cfg.hipX || 0.12), Y - (cfg.hipY || 0.28), Z);
+    const knee = V(wx(lg.kx), lg.ky, Z + 0.12), foot = V(wx(lg.fx), lg.fy, lg.planted ? -0.02 : Z);
+    limb(l.thigh, hip, knee, 0.085); limb(l.shin, knee, foot, 0.07);
+    l.knee.position.copy(knee); l.knee.scale.setScalar(0.08);
+    l.foot.position.copy(foot).add(V(0, -0.02, 0.04));
+  }
+  // older snapshots without legs: dangle and trail behind the motion (2-bone IK in the plane)
+  else for (let i = 0; i < 2; i++) {
+    const s = i ? 1 : -1, l = o.legs[i];
+    const hip = V(X + s * 0.12 - lean * 0.1, Y - 0.36, Z);
+    const sway = Math.sin(performance.now() / 700 + i * 2) * 0.04;
+    const foot = V(hip.x + s * 0.08 - o.vx * 0.06 + sway, hip.y - 0.74 + Math.min(0.2, Math.max(-0.1, -o.vy * 0.03)), Z + 0.05);
+    const L1 = 0.42, L2 = 0.42, d = Math.min(L1 + L2 - 0.001, hip.distanceTo(foot));
+    const dir = new THREE.Vector3().subVectors(foot, hip).normalize();
+    const along = (L1 * L1 - L2 * L2 + d * d) / (2 * d), up = Math.sqrt(Math.max(0, L1 * L1 - along * along));
+    const knee = hip.clone().addScaledVector(dir, along).add(V(s * up * 0.5, 0, up * 0.85)); // knees out and toward the wall
+    foot.copy(hip).addScaledVector(dir, d);
+    limb(l.thigh, hip, knee, 0.085); limb(l.shin, knee, foot, 0.07);
+    l.knee.position.copy(knee); l.knee.scale.setScalar(0.08);
+    l.foot.position.copy(foot).add(V(0, -0.03, 0.02));
+  }
+  o.label.position.set(X, Y + 0.95, Z + 0.3);
+  o.label.visible = !(mode === 'phone' && c.id === Net.me);
+}
+
