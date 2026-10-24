@@ -382,12 +382,13 @@ function setHand(c, i, closed) {
   if (!h) { c.wantClosed = c.wantClosed || [false, false]; c.wantClosed[i] = closed; return; }
   h.closed = closed;
   if (!closed && h.joint) {
+    const wasOnCourse = h.grip.kind === 'hold' || holdGrips(c) > 0;
     release(c, h);
     // the arms just let go of the wall completely. Hanging (no footing) and the legs hopped a
     // moment ago against the wall? That's the combo.
     if (!gripCount(c)) {
       const t = now();
-      c.lastLetGo = t; c.letGoHanging = !feetOnRock(c);
+      c.lastLetGo = t; c.letGoHanging = wasOnCourse && !feetOnRock(c);
       if (t - c.lastPush < CONFIG.comboWindow * 1000 && c.pushHanging) launch(c, t);
     }
   }
@@ -439,11 +440,13 @@ function pushDirection(c) {
 function doPush(c, t, power) {
   if (t < c.cdPush) return 'cooldown';
   const letGoJustNow = !gripCount(c) && t - c.lastLetGo < CONFIG.comboWindow * 1000;
-  const feetDown = feetOnRock(c) || t - c.lastFoot < 250 || gripCount(c) > 0 || isStanding(c) || letGoJustNow;
+  // holding another climber is not something to push off: only the course is (else two people
+  // holding hands in mid-air could leapfrog each other up forever)
+  const feetDown = feetOnRock(c) || t - c.lastFoot < 250 || holdGrips(c) > 0 || isStanding(c) || letGoJustNow;
   if (!feetDown) return 'no footing';
   c.cdPush = t + 400;
   c.lastPush = t;
-  c.pushHanging = gripCount(c) > 0 && !feetOnRock(c); // smearing the wall while the hands hold on
+  c.pushHanging = holdGrips(c) > 0 && !feetOnRock(c); // smearing the wall while the hands hold on
   c.stats.pushes++;
   emitEvent('push', { id: c.id });
   // the arms let go of a hanging position first, then the hop: launch
