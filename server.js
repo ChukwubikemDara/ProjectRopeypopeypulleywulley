@@ -326,3 +326,122 @@ function leaveTeam(p) {
 // a team with exactly one human has a free seat
 const openTeam = (except) => [...climbers.values()].find(c => !c.bot && c !== except && humans(c).length === 1);
 
+// ---------------------------------------------------------------- inputs
+function onInput(p, msg) {
+  const c = climbers.get(p.climberId);
+  if (!c) return;
+  const role = roleOf(p);
+  const num = (v) => typeof v === 'number' && Number.isFinite(v) ? Math.max(-1, Math.min(1, v)) : null;
+  if (role !== 'legs') {
+    if (num(msg.aim) !== null) c.aim = num(msg.aim);
+    if (num(msg.ay) !== null) c.ay = num(msg.ay);
+    if (typeof msg.brace === 'boolean') c.braceInput = msg.brace;
+    if (typeof msg.l === 'boolean') setHand(c, 0, msg.l);
+    if (typeof msg.r === 'boolean') setHand(c, 1, msg.r);
+  }
+  if (role === 'legs') {
+    if (num(msg.aim) !== null) c.legAim = num(msg.aim);
+    if (typeof msg.brace === 'boolean') c.legBrace = msg.brace;
+  }
+}
+function setHand(c, i, closed) {
+  const h = c.hands && c.hands[i];
+  if (!h) { c.wantClosed = c.wantClosed || [false, false]; c.wantClosed[i] = closed; return; }
+  h.closed = closed;
+  if (!closed && h.joint) {
+    release(c, h);
+    // the arms just let go of the wall completely. Hanging (no footing) and the legs hopped a
+    // moment ago against the wall? That's the combo.
+    if (!gripCount(c)) {
+      const t = now();
+      c.lastLetGo = t; c.letGoHanging = !feetOnRock(c);
+      if (t - c.lastPush < CONFIG.comboWindow * 1000 && c.pushHanging) launch(c, t);
+    }
+  }
+}
+
+function onGesture(p, g, power) {
+  const c = climbers.get(p.climberId);
+  if (phase !== 'playing' || !c || !c.body) return;
+  if (process.env.DEBUG) console.log(new Date().toISOString().slice(11, 23), 'gesture', p.name, roleOf(p), g, 'power', power);
+  const t = now(), role = roleOf(p);
+  if (role === 'arms') return; // the arms only tilt and grip
+  if (g === 'flick' || g === 'push') return doPush(c, t, power);
+  if (g === 'yank' || g === 'tuck') { c.tuckUntil = t + 700; return; }
+  if (g === 'kick') return doKick(c, t);
+}
+
+function comboDone(c, t) {
+  c.lastCombo = t;
+  c.stamina = Math.max(0, c.stamina - CONFIG.comboCost);
+  c.stats.combos++;
+  emitEvent('combo', { id: c.id });
+}
+// the combo: the body launches while the hands are off the wall; closed hands catch whatever they pass
+function launch(c, t) {
+  if (t - c.lastCombo < CONFIG.comboCooldown * 1000) return false;
+  for (const h of c.hands) if (h.joint) { release(c, h, 'dyno'); h.noGripUntil = t + 180; }
+  c.pushUntil = t + 220; c.pushDir = pushDirection(c); c.pushSpeed = CONFIG.legPushSpeed + CONFIG.comboBonus;
+  comboDone(c, t);
+  return true;
+}
+function pushDirection(c) {
+  const hip = c.body.getPosition();
+  const feet = c.legs.map(footPoint);
+  const fx = (feet[0].x + feet[1].x) / 2;
+  // mostly up, steered by the legs player's lean (and a little by where the feet are), never sideways
+  const lean = Math.sin((c.legAim || 0) * 30 * Math.PI / 180) * 0.6;
+  const dir = Vec2(lean + Math.max(-0.3, Math.min(0.3, (hip.x - fx) * 0.4)), 1); dir.normalize();
+  return dir;
+}
+
+// legs, hop / stand up fast: the ONLY way up. Push off whatever the feet touch: the floor, a rock you
+// stand on, or the wall while the hands hold on. Normal climbing: feet on a rock, arms let go, legs hop.
+// Combo: hanging with no footing, legs hop against the wall and the arms let go together = launch.
+function doPush(c, t, power) {
+  if (t < c.cdPush) return;
+  const letGoJustNow = !gripCount(c) && t - c.lastLetGo < CONFIG.comboWindow * 1000;
+  const feetDown = feetOnRock(c) || t - c.lastFoot < 250 || gripCount(c) > 0 || isStanding(c) || letGoJustNow;
+  if (!feetDown) return;
+  c.cdPush = t + 400;
+  c.lastPush = t;
+  c.pushHanging = gripCount(c) > 0 && !feetOnRock(c); // smearing the wall while the hands hold on
+  c.stats.pushes++;
+  emitEvent('push', { id: c.id });
+  // the arms let go of a hanging position first, then the hop: launch
+  if (letGoJustNow && c.letGoHanging && launch(c, t)) return;
+  const strength = Math.max(0.6, Math.min(1.15, typeof power === "number" ? power : 1));
+  let speed = CONFIG.legPushSpeed * strength * (1 + (Math.random() * 2 - 1) * CONFIG.flickJank);
+  // standing on a climber who holds on = boost off them (they get shoved down)
+  const booster = gripCount(c) ? null : touchingClimberBelow(c, true);
+  if (booster) {
+    speed *= CONFIG.boostMult;
+    c.stats.boosts++;
+    booster.body.applyLinearImpulse(Vec2(0, -speed * 0.15 * booster.body.getMass()), booster.body.getPosition(), true);
+    emitEvent('boost', { id: c.id, by: booster.id });
+  }
+  // powered briefly: a one-off kick gets soaked up by the limbs. Hands still holding? You only
+  // push into your arms, until they let go.
+  c.pushUntil = t + 160; c.pushDir = pushDirection(c); c.pushSpeed = speed;
+}
+
+// legs, shove the phone forward: kick whoever is near your feet
+function doKick(c, t) {
+  if (t < c.cdKick) return;
+  c.cdKick = t + CONFIG.kickCooldown * 1000;
+  const feet = c.legs.map(footPoint);
+  for (const o of climbers.values()) {
+    if (o === c || !o.body) continue;
+    const q = o.body.getPosition();
+    const f = feet.find(f => Vec2.distance(f, q) < CONFIG.radius + 0.55);
+    if (!f) continue;
+    const dir = Vec2.sub(q, f); dir.normalize();
+    o.body.applyLinearImpulse(Vec2.mul(dir, CONFIG.kickImpulse * o.body.getMass()), q, true);
+    const held = !(holdGrips(o) && !o.braced);
+    if (!held) { const oh = o.hands.find(x => x.grip && x.grip.kind === 'hold'); release(o, oh, 'kicked'); emitEvent('slip', { id: o.id, reason: 'kicked' }); }
+    else o.stamina = Math.max(0, o.stamina - 20);
+    c.stats.kicks++;
+    emitEvent('kick', { id: c.id, target: o.id, held });
+  }
+}
+
