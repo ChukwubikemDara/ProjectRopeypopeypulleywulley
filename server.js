@@ -445,3 +445,103 @@ function doKick(c, t) {
   }
 }
 
+// ---------------------------------------------------------------- simulation step
+const DT = 1 / 60;
+// muscle: pull `part` toward `target`, push the torso the opposite way (internal force, no free flying)
+function muscle(c, part, at, target, k, d, max) {
+  const rv = Vec2.sub(part.getLinearVelocityFromWorldPoint(at), c.body.getLinearVelocity());
+  let f = Vec2(k * (target.x - at.x) - d * rv.x, k * (target.y - at.y) - d * rv.y);
+  const len = f.length();
+  if (len > max) f = Vec2.mul(f, max / len);
+  part.applyForce(f, at, true);
+  c.body.applyForceToCenter(Vec2.neg(f), true);
+}
+
+function step() {
+  if (phase !== 'playing') return;
+  const t = now();
+
+  for (const c of climbers.values()) {
+    if (!c.body) continue;
+    if (c.bot) botThink(c, t);
+    if (c.wantClosed) { c.wantClosed.forEach((v, i) => setHand(c, i, v)); c.wantClosed = null; }
+    const p = c.body.getPosition();
+    const weight = c.mass * CONFIG.gravity;
+    c.braced = c.braceInput !== false && gripCount(c) > 0 && c.stamina > 0;
+
+    // arms: each hand chases a point the arms player picks (tilt = a 2D pointer around the shoulder),
+    // each on its own side so they don't tangle. A gripping hand moves your BODY instead (swing / hang).
+    // Bots / old clients without a vertical axis fall back to "reach along the aim angle".
+    const a = (c.aim || 0) * CONFIG.armAimDeg * Math.PI / 180;
+    for (const h of c.hands) {
+      const sh = c.body.getWorldPoint(Vec2(h.side * CONFIG.shoulderX, CONFIG.shoulderY));
+      let ox, oy;
+      if (typeof c.ay === 'number') {
+        ox = (c.aim || 0) * CONFIG.reach + h.side * CONFIG.handSpread; oy = c.ay * CONFIG.reach;
+        const L = Math.hypot(ox, oy); if (L > CONFIG.reach) { ox *= CONFIG.reach / L; oy *= CONFIG.reach / L; }
+      } else { const ang = a + h.side * 0.35; ox = Math.sin(ang) * CONFIG.reach; oy = Math.cos(ang) * CONFIG.reach; }
+      muscle(c, h.hand, h.hand.getPosition(), Vec2(sh.x + ox, sh.y + oy), CONFIG.armK, CONFIG.armD,
+        CONFIG.armStrength * weight * (h.joint ? 1 : 0.35));
+      if (h.closed && !h.joint && t > h.noGripUntil) tryGrab(c, h);
+    }
+
+    // legs: feet chase a point below the hips (lean = swing them sideways, tuck = knees up).
+    // A foot resting on a rock props you up like a real leg, but it never grabs.
+    const tucked = t < c.tuckUntil;
+    const la = (c.legAim || 0) * CONFIG.legAimDeg * Math.PI / 180;
+    for (const l of c.legs) {
+      const hip = c.body.getWorldPoint(Vec2(l.side * CONFIG.hipX, -CONFIG.hipY));
+      const R = tucked ? CONFIG.legReach * 0.4 : CONFIG.legReach;
+      const target = Vec2(hip.x + Math.sin(la) * R + l.side * 0.1, hip.y - Math.cos(la) * R + (tucked ? 0.15 : 0));
+      muscle(c, l.shin, footPoint(l), target, CONFIG.legK, CONFIG.legD, CONFIG.legStrength * weight * (footContact(l) ? 1 : 0.4));
+    }
+    if (feetOnRock(c)) c.lastFoot = t;
+
+    // arms tilt steers you through the air
+    if (!gripCount(c)) c.body.applyForceToCenter(Vec2((c.aim || 0) * CONFIG.airControl * weight, 0), true);
+    if (t < c.pushUntil) {
+      const v = c.body.getLinearVelocity(), along = Vec2.dot(v, c.pushDir);
+      if (along < c.pushSpeed) c.body.setLinearVelocity(Vec2.add(v, Vec2.mul(c.pushDir, c.pushSpeed - along)));
+    }
+
+    // big falls: measured from the highest point since you last had support
+    const supported = gripCount(c) > 0 || isStanding(c);
+    c.air = !supported;
+    if (!supported) c.airPeak = Math.max(c.airPeak ?? p.y, p.y);
+    else {
+      const drop = (c.airPeak ?? p.y) - p.y;
+      if (drop > 3) { c.stats.biggestFall = Math.max(c.stats.biggestFall, drop); emitEvent('fall', { id: c.id, m: Math.round(drop) }); }
+      c.airPeak = null;
+    }
+    c.peakY = Math.max(c.peakY, p.y);
+    if (p.y >= level.top && phase === 'playing') { phase = 'results'; winner = c.id; emitEvent('win', { id: c.id }); }
+  }
+
+  world.step(DT, 10, 6);
+
+  // carrying people -> stamina drain / grip break. Counted, not measured: joint forces spike
+  // every time you catch yourself, which made the rules feel random. Feet on a rock = rest.
+  for (const c of climbers.values()) {
+    if (!c.body) continue;
+    const n = gripCount(c), feet = feetOnRock(c);
+    if (!n) { c.carry = 0; c.overSince = 0; c.holdingSince = 0; c.stamina = Math.min(100, c.stamina + CONFIG.staminaRegen * DT * (feet ? 1 : 0.5)); continue; }
+    const carry = anchored(c) ? danglingFrom(c) : 0;
+    c.carry = carry;
+    // over the limit for half a second (fidgeting while someone hangs off you) = ripped off
+    if (carry > (c.braced ? CONFIG.maxCarryBraced : CONFIG.maxCarryFidgeting)) {
+      c.overSince = c.overSince || t;
+      if (t - c.overSince > 500) { c.overSince = 0; releaseAll(c, 'ripped', 400); continue; }
+    } else c.overSince = 0;
+    let drain = carry * CONFIG.staminaDrain;
+    if (n === 1 && !feet && !isStanding(c)) drain += CONFIG.oneHandDrain;
+    if (drain > 0) {
+      c.stamina -= drain * DT;
+      if (c.stamina <= 0) { c.stamina = 0; releaseAll(c, 'exhausted', 1200); continue; }
+    } else c.stamina = Math.min(100, c.stamina + CONFIG.staminaRegen * DT);
+    if (carry > 0 && c.braced) {
+      if (!c.holdingSince) c.holdingSince = t;
+      if (t - c.holdingSince > 1500 && !c.savedCounted) { c.stats.saves++; c.savedCounted = true; emitEvent('save', { id: c.id }); }
+    } else { c.holdingSince = 0; c.savedCounted = false; }
+  }
+}
+
