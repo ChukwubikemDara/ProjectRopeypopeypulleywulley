@@ -197,3 +197,159 @@ function tree(x, y, z, height, seed) {
   return mergeGeometries(parts.map(g => g.index ? g.toNonIndexed() : g));
 }
 
+// ---------------------------------------------------------------- level
+const levelGroup = new THREE.Group();
+scene.add(levelGroup);
+let level = null, flag = null;
+const WATER_Y = -0.35;
+
+// water with a scrolling procedural normal map
+const waterNormal = canvasTex(256, 256, (g, w, h) => {
+  const img = g.createImageData(w, h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const f = (a, b) => noise3(a / 18, b / 18, 0) + 0.5 * noise3(a / 7, b / 7, 3);
+    const dx = f(x + 1, y) - f(x - 1, y), dy = f(x, y + 1) - f(x, y - 1);
+    const i = (y * w + x) * 4;
+    img.data[i] = 128 + dx * 160; img.data[i + 1] = 128 + dy * 160; img.data[i + 2] = 255; img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+});
+waterNormal.colorSpace = THREE.NoColorSpace;
+waterNormal.wrapS = waterNormal.wrapT = THREE.RepeatWrapping;
+waterNormal.repeat.set(24, 24);
+const water = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200),
+  new THREE.MeshStandardMaterial({ color: 0x18435a, roughness: 0.22, metalness: 0.05, normalMap: waterNormal, normalScale: new THREE.Vector2(0.25, 0.25), transparent: true, opacity: 0.95 }));
+water.rotation.x = -Math.PI / 2;
+water.position.y = WATER_Y;
+water.receiveShadow = true;
+scene.add(water);
+
+function textSprite(text, { size = 64, color = '#fff', stroke = '#1b1e2e', bg = null, scale = 1 } = {}) {
+  const pad = 16, font = `900 ${size}px system-ui, -apple-system, sans-serif`;
+  const m = document.createElement('canvas').getContext('2d'); m.font = font;
+  const w = Math.ceil(m.measureText(text).width) + pad * 2, h = size + pad * 2;
+  const tex = canvasTex(w, h, (g) => {
+    g.font = font; g.textAlign = 'center'; g.textBaseline = 'middle';
+    if (bg) { g.fillStyle = bg; g.beginPath(); g.roundRect(2, 2, w - 4, h - 4, 18); g.fill(); }
+    if (stroke) { g.lineWidth = size / 6; g.strokeStyle = stroke; g.lineJoin = 'round'; g.strokeText(text, w / 2, h / 2 + 2); }
+    g.fillStyle = color; g.fillText(text, w / 2, h / 2 + 2);
+  });
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, fog: false }));
+  s.scale.set((w / h) * 0.42 * scale, 0.42 * scale, 1);
+  return s;
+}
+
+function buildLevel(L) {
+  level = L;
+  levelGroup.clear();
+  const W = L.width, T = L.top;
+  const r = rng(1234);
+  const rock = [], moss = [];
+  const pick = () => (r() < 0.22 ? moss : rock);
+
+  // the climbing wall: a packed field of boulders behind the climbing plane
+  for (let y = -1; y < T + 3; y += 1.45) {
+    for (let x = -W / 2 - 2.5; x < W / 2 + 2.5; x += 1.7) {
+      const rad = 0.9 + r() * 0.7;
+      const px = x + (r() - 0.5) * 0.9, py = y + (r() - 0.5) * 0.7;
+      pick().push(boulder(rad, px, py, -0.55 - rad * 0.55, 1.05, 0.85, 0.55, Math.floor(r() * 1e6)));
+    }
+  }
+  // the column's edges: bigger boulders sticking out toward the camera, framing the climb
+  for (let y = -1; y < T + 4; y += 2.2) for (const s of [-1, 1]) {
+    const rad = 1.6 + r() * 1.2;
+    pick().push(boulder(rad, s * (W / 2 + 1.4 + r() * 1.2), y + r(), -0.2 + r() * 0.8, 0.9, 1.0, 0.8, Math.floor(r() * 1e6), 0.95));
+  }
+  // shore stones you start on (the physics floor is y = 0)
+  for (let x = -W / 2 - 3; x < W / 2 + 3; x += 1.1) {
+    const rad = 0.7 + r() * 0.5;
+    pick().push(boulder(rad, x + (r() - 0.5) * 0.6, -rad * 0.62, (r() - 0.3) * 1.6, 1.1, 0.62, 1.0, Math.floor(r() * 1e6), 0.9));
+  }
+  // solid backdrop so no sky shows through gaps between boulders
+  for (let y = -2; y < T + 6; y += 3) for (let x = -W / 2 - 4; x < W / 2 + 4; x += 3)
+    rock.push(boulder(2.2, x + (r() - 0.5), y + (r() - 0.5), -2.6, 1.1, 1.1, 0.6, Math.floor(r() * 1e6), 0.62));
+  // foreground stones half in the water, off to the sides, for depth
+  for (let i = 0; i < 10; i++) {
+    const side = i % 2 ? 1 : -1, rad = 0.8 + r() * 1.4;
+    pick().push(boulder(rad, side * (W / 2 - 1 + r() * 7), WATER_Y - rad * 0.3, 1.5 + r() * 4, 1.2, 0.7, 1, Math.floor(r() * 1e6), 0.85));
+  }
+  // summit plateau
+  for (let x = -W / 2 - 1; x < W / 2 + 1; x += 1.5) rock.push(boulder(1.2, x, T + 0.2, -0.4, 1.0, 0.55, 1.2, Math.floor(r() * 1e6)));
+
+  // holds: rock knobs poking out of the wall right at the grab points
+  const holds = [];
+  for (const h of L.holds) holds.push(boulder(0.24, wx(h.x), h.y - 0.04, -0.12, 1.25, 0.75, 1.1, h.id * 31 + 7, 1.35));
+
+  for (const [geos, mat] of [[rock, rockMat], [moss, mossMat], [holds, holdMat]]) {
+    const m = new THREE.Mesh(mergeGeometries(geos), mat);
+    m.castShadow = true; m.receiveShadow = true;
+    levelGroup.add(m);
+  }
+
+  // distant rock spires fading into the haze
+  const far = [];
+  for (let i = 0; i < 14; i++) {
+    const side = i % 2 ? 1 : -1, fx = side * (22 + r() * 60), fz = -30 - r() * 90;
+    const hgt = 20 + r() * 50;
+    for (let k = 0; k < hgt; k += 6) far.push(boulder(5 + r() * 3, fx + (r() - 0.5) * 3, k, fz, 1, 1.2, 1, Math.floor(r() * 1e6), 0.85));
+  }
+  const farMesh = new THREE.Mesh(mergeGeometries(far), rockMat);
+  levelGroup.add(farMesh);
+
+  // foliage + dead trees
+  const ferns = [];
+  for (let i = 0; i < (HI ? 70 : 40); i++) {
+    const edge = r() < 0.55;
+    const fx = edge ? (r() < 0.5 ? -1 : 1) * (W / 2 + 0.3 + r() * 2) : (r() - 0.5) * W;
+    const fy = r() < 0.15 ? r() * 2 : r() * T;
+    ferns.push(fern(fx, fy, edge ? 0.2 : -0.45, 0.6 + r() * 0.6, i * 101 + 5));
+  }
+  for (let x = -W / 2 - 4; x < W / 2 + 4; x += 1.4) ferns.push(fern(x + r(), 0.05, 0.6 + r() * 1.2, 0.7 + r() * 0.5, Math.floor(x * 97) + 2000));
+  const fernMesh = new THREE.Mesh(mergeGeometries(ferns), fernMat);
+  fernMesh.castShadow = true; fernMesh.receiveShadow = true;
+  levelGroup.add(fernMesh);
+  const trees = [];
+  for (let i = 0; i < 5; i++) trees.push(tree((r() < 0.5 ? -1 : 1) * (W / 2 - 0.5 - r() * 1.5), r() * T * 0.9, -0.25, 3 + r() * 3, i * 7 + 1));
+  const treeMesh = new THREE.Mesh(mergeGeometries(trees), barkMat);
+  treeMesh.castShadow = true; treeMesh.receiveShadow = true;
+  levelGroup.add(treeMesh);
+
+  // "2+ CLIMBERS" signs at each duo gap: a plank on a post, nailed to the wall
+  for (const [a, b] of L.gaps) {
+    const sy = (a + b) / 2;
+    const signTex = canvasTex(512, 200, (g, w, h) => {
+      g.fillStyle = '#9a6a3c'; g.fillRect(0, 0, w, h);
+      g.strokeStyle = 'rgba(60,35,15,.5)'; g.lineWidth = 3;
+      for (let i = 1; i < 4; i++) { g.beginPath(); g.moveTo(0, i * h / 4 + Math.sin(i) * 4); g.lineTo(w, i * h / 4); g.stroke(); }
+      g.textAlign = 'center'; g.fillStyle = '#fff6e0'; g.strokeStyle = '#2b1a0c'; g.lineWidth = 8;
+      g.font = '900 72px system-ui, sans-serif'; g.strokeText('TEAMWORK', w / 2, 92); g.fillText('TEAMWORK', w / 2, 92);
+      g.font = '800 30px system-ui, sans-serif'; g.lineWidth = 5; g.strokeText('legs PUSH + arms PULL together', w / 2, 150); g.fillText('legs PUSH + arms PULL together', w / 2, 150);
+    });
+    const board = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.0, 0.08), [woodMat, woodMat, woodMat, woodMat, new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.8 }), woodMat]);
+    board.position.set(0, sy, -0.15); board.rotation.z = (r() - 0.5) * 0.08;
+    board.castShadow = true;
+    levelGroup.add(board);
+    for (const yy of [a, b]) { // a frayed rope line marking each edge of the gap
+      const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, W + 1, 6), new THREE.MeshStandardMaterial({ color: 0xd8b15a, roughness: 0.9 }));
+      rope.rotation.z = Math.PI / 2; rope.position.set(0, yy, -0.2);
+      levelGroup.add(rope);
+    }
+  }
+  // height marks
+  for (let m = 10; m < T; m += 10) {
+    const s = textSprite(`${m} m`, { size: 48, color: '#1b1e2e', stroke: null, bg: 'rgba(255,255,255,.85)', scale: 0.9 });
+    s.position.set(-W / 2 - 0.3, m, 0.3);
+    levelGroup.add(s);
+  }
+  // summit flag
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3, 8), new THREE.MeshStandardMaterial({ color: 0xdddddd, metalness: 0.6, roughness: 0.3 }));
+  pole.position.set(0, T + 2.1, -0.2); pole.castShadow = true;
+  flag = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 0.9, 16, 6), new THREE.MeshStandardMaterial({ color: 0xff5a5f, side: THREE.DoubleSide, roughness: 0.7 }));
+  flag.geometry.translate(0.75, 0, 0);
+  flag.position.set(0.05, T + 3.1, -0.2); flag.castShadow = true;
+  flag.userData.base = flag.geometry.attributes.position.array.slice();
+  const summitText = textSprite('SUMMIT', { size: 80, color: '#ffd23f', scale: 2.2 });
+  summitText.position.set(0, T + 4.6, 0);
+  levelGroup.add(pole, flag, summitText);
+}
+
