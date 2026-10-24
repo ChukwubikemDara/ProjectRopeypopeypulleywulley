@@ -545,3 +545,32 @@ function step() {
   }
 }
 
+// ---------------------------------------------------------------- bots (for testing with fewer phones)
+function botThink(c, t) {
+  c.braceInput = true;
+  const p = c.body.getPosition();
+  if (!c.target || c.target.y < p.y || t > c.targetUntil) {
+    const options = level.holds.filter(h => h.y > p.y + 0.6 && h.y < p.y + 2.6);
+    c.target = options[Math.floor(Math.random() * options.length)] || null;
+    c.targetUntil = t + 4000;
+  }
+  c.aim = c.target ? Math.max(-1, Math.min(1, (c.target.x - p.x) / 1.5)) * 0.8 : 0;
+  c.legAim = c.aim * 0.5;
+  // bots are both players: hands stay closed. Hanging for a bit? Hop, then let go a beat later
+  // (the combo) and grab again on the way up. Holding a person too long? Drop them. Bots are not loyal.
+  for (const h of c.hands) {
+    if (h.grip && h.grip.kind === 'climber' && t - h.since > 2500) h.openUntil = t + 800;
+    setHand(c, c.hands.indexOf(h), t > (h.openUntil || 0));
+  }
+  if (!c.nextMove) c.nextMove = t + 600 + Math.random() * 1200;
+  if (t < c.nextMove) return;
+  c.nextMove = t + 1100 + Math.random() * 1400;
+  const gripping = c.hands.filter(h => h.grip && h.grip.kind === 'hold');
+  if (gripping.length) {
+    doPush(c, t, 1);
+    const letGoIn = 80 + Math.random() * 250;
+    for (const h of c.hands) h.openUntil = t + letGoIn + 300;
+    setTimeout(() => { if (c.body) c.hands.forEach((h, i) => setHand(c, i, false)); }, letGoIn);
+  } else doPush(c, t, 1);
+}
+
