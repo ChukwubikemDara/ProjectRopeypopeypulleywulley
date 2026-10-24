@@ -91,6 +91,18 @@ function resetWorld() {
     const f = ground.createFixture(new Circle(Vec2(h.x, h.y), 0.12), { friction: 1.2, filterCategoryBits: CAT.HOLD, filterMaskBits: CAT.FOOT });
     f.setUserData({ hold: h.id });
   }
+  // ...and one-way, like platforms: a foot passes through a hold from below or the side and only
+  // lands on it coming down from above. Otherwise a trailing foot snags under a hold mid-jump and
+  // stops the whole body.
+  world.on('pre-solve', (contact) => {
+    const a = contact.getFixtureA(), b = contact.getFixtureB();
+    const holdFix = a.getUserData() && a.getUserData().hold !== undefined ? a : b.getUserData() && b.getUserData().hold !== undefined ? b : null;
+    if (!holdFix) return;
+    const shin = (holdFix === a ? b : a).getBody();
+    const hold = level.holds[holdFix.getUserData().hold];
+    const foot = shin.getWorldPoint(Vec2(0, -CONFIG.shin / 2));
+    if (foot.y < hold.y + 0.1 || shin.getLinearVelocity().y > 0.5) contact.setEnabled(false);
+  });
   for (const c of climbers.values()) { c.body = null; c.hands = []; c.legs = []; }
 }
 
