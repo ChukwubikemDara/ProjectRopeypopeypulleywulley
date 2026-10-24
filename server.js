@@ -759,6 +759,8 @@ if (require.main === module) {
     const isPrivate = (ip) => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);
     const ip = ips.find(isPrivate) || ips[0];
     if (ip) lanJoinUrl = `https://${ip.replace(/\./g, '-')}.local-ip.sh:${HTTPS_PORT}/`;
+    // a busy port (another copy of the server) shouldn't take the whole game down
+    secure.on('error', (e) => { lanJoinUrl = null; console.warn(`HTTPS disabled: ${e.code === 'EADDRINUSE' ? `port ${HTTPS_PORT} is already in use` : e.message}`); });
     secure.listen(HTTPS_PORT, () => console.log(`HTTPS on port ${HTTPS_PORT}. Phones join at ${lanJoinUrl || '(no network)'}`));
   }
 }
