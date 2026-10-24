@@ -25,6 +25,10 @@ const io = new Server(server);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/lib/three/addons', express.static(path.join(__dirname, 'node_modules/three/examples/jsm')));
 app.use('/lib/three', express.static(path.join(__dirname, 'node_modules/three/build')));
+// the link phones should use: the local-Wi-Fi https address when we serve one (private network
+// addresses first, e.g. a phone hotspot), so a big screen opened at localhost shows a QR phones can use
+let lanJoinUrl = null;
+app.get('/join-url', (req, res) => res.json({ url: lanJoinUrl }));
 app.get('/qr.svg', async (req, res) => {
   const url = String(req.query.url || '').slice(0, 300);
   res.type('image/svg+xml').send(await QRCode.toString(url, { type: 'svg', margin: 1 }));
@@ -751,7 +755,11 @@ if (require.main === module) {
   if (fs.existsSync(cert) && fs.existsSync(key)) {
     const secure = https.createServer({ cert: fs.readFileSync(cert), key: fs.readFileSync(key) }, app);
     io.attach(secure);
-    secure.listen(HTTPS_PORT, () => console.log(`HTTPS on port ${HTTPS_PORT} (see npm run lan for the phone link)`));
+    const ips = Object.values(require('os').networkInterfaces()).flat().filter(a => a && a.family === 'IPv4' && !a.internal).map(a => a.address);
+    const isPrivate = (ip) => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);
+    const ip = ips.find(isPrivate) || ips[0];
+    if (ip) lanJoinUrl = `https://${ip.replace(/\./g, '-')}.local-ip.sh:${HTTPS_PORT}/`;
+    secure.listen(HTTPS_PORT, () => console.log(`HTTPS on port ${HTTPS_PORT}. Phones join at ${lanJoinUrl || '(no network)'}`));
   }
 }
 // _debug: lets test/sim.js poke at the world directly (place climbers, read joints)
