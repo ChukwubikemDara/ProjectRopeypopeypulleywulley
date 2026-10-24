@@ -1,6 +1,7 @@
-// Headless smoke test: 4 phones join (= 2 teams of arms + legs), a round starts, and we check the core rules.
-// Run: node test/sim.js
+// Headless smoke test: 4 phones join (= 2 teams of arms + legs), a round starts on the race course,
+// and we check the core rules. Run: node test/sim.js
 const { server, CONFIG, _debug } = require('../server');
+const COURSE = require('../course');
 const { io: connect } = require('socket.io-client');
 const { Vec2 } = require('planck');
 
@@ -21,6 +22,7 @@ async function peak(c, ms, fn = (c) => c.body.getPosition().y) {
   for (let i = 0; i < ms / 16; i++) { await wait(16); m = Math.max(m, fn(c)); }
   return m;
 }
+const STAND = CONFIG.hipY + CONFIG.thigh + CONFIG.shin + CONFIG.footRadius; // torso height above what you stand on
 
 server.listen(PORT, async () => {
   const players = [];
@@ -43,6 +45,8 @@ server.listen(PORT, async () => {
   await wait(200);
   const P = (p) => _debug.players.get(p.id);
   const C = (p) => _debug.climbers.get(P(p).climberId);
+  const holdsOf = (kind) => _debug.level.holds.filter(h => h.kind === kind);
+  const release = (...ps) => ps.forEach(p => p.s.emit('input', { aim: 0, ay: 0.6, l: false, r: false, brace: true }));
 
   // ---- teams
   check(roster.length === 2 && roster.every(c => c.members.length === 2), `4 phones make 2 climbers of 2 (${roster.map(c => c.members.length).join('+')})`);
@@ -56,12 +60,12 @@ server.listen(PORT, async () => {
 
   players[0].s.emit('start');
   await wait(1500);
-  check(level && level.holds.length > 50, `level built with ${level?.holds.length} holds`);
+  check(level && level.terrain.length > 5 && level.holds.length > 25 && level.finish, `course sent to clients (${level?.terrain.length} terrain pieces, ${level?.holds.length} holds)`);
+  check(level.holds.every(h => !('body' in h)), 'clients get plain data, no physics objects');
   check(last.phase === 'playing', 'round is playing');
   check(last.c.length === 2 && last.c[0].length === 27, '2 climbers spawned with arms + legs');
-  const ys = last.c.map(c => c[2]);
-  check(ys.every(y => y > 0.6 && y < 1.4), 'everyone standing on their legs: ' + ys.map(y => y.toFixed(2)).join(', '));
-  check(A().legs.every(l => !l.plant) && A().hands.every(h => !h.joint), 'feet stand on the floor without holding on to it');
+  const ys = last.c.map(c => c[2]), xs = last.c.map(c => c[1]);
+  check(ys.every(y => y > 0.6 && y < 1.4) && xs.every(x => x >= COURSE.spawn.x0 - 0.5 && x <= COURSE.spawn.x1 + 0.5), 'everyone starts standing in the start area: ' + xs.map((x, i) => `(${x.toFixed(1)},${ys[i].toFixed(2)})`).join(' '));
 
   // ---- the arms can't jump: a jerk from the arms phone does nothing
   events.length = 0;
@@ -69,91 +73,104 @@ server.listen(PORT, async () => {
   a1.s.emit('gesture', 'flick', 1.5); await wait(500);
   check(!events.some(e => e.type === 'push') && Math.abs(A().body.getPosition().y - yArms) < 0.2, 'arms phone jerking does not jump');
 
-  // ---- arms close hands, LEGS hop, the hands grab the starter row
-  for (const p of [a1, b1]) { p.s.emit('input', { aim: 0, ay: 1, brace: true, l: true, r: true }); }
-  await wait(100);
-  for (const p of [a2, b2]) p.s.emit('gesture', 'flick', 1);
-  await wait(1500);
-  const gripping = last.c.filter(c => (gripFlags(c, 0) | gripFlags(c, 1)) & 2).length;
-  check(gripping >= 1, `${gripping}/2 grabbed a hold after the legs hopped with hands closed`);
+  // ---- arms close hands, LEGS hop, the hands catch the first shortcut knob above the start
+  const knob = holdsOf('knob').sort((p, q) => p.x - q.x)[0];
+  // like a player, it may take a retry or two: try a few take-off spots / arm angles
+  for (const [dx, aim] of [[-1.2, 0.5], [-0.5, 0], [-0.8, 0]]) {
+    release(a1);
+    place(A(), knob.x + dx, STAND + 0.05);
+    a2.s.emit('input', { aim: 0.6, brace: true });
+    await wait(400);
+    a1.s.emit('input', { aim, ay: 1, brace: true, l: true, r: true });
+    A().cdPush = 0; a2.s.emit('gesture', 'flick', 1);
+    await wait(1000);
+    if (A().hands.some(h => h.grip && h.grip.id === knob.id)) break;
+  }
+  check(A().hands.some(h => h.grip && h.grip.id === knob.id), `legs hop + closed hands catch the knob ${knob.y.toFixed(1)} m up`);
 
-  // ---- legs: push off the floor
-  const bLegs = B();
-  b1.s.emit('input', { l: false, r: false });
-  for (let i = 0; i < 60 && !bLegs.legs.some(l => l.plant); i++) await wait(50); // let them land first
-  const y0 = bLegs.body.getPosition().y;
-  events.length = 0;
+  // ---- legs: push off the floor (open ground at the start). Open all hands first: a closed free
+  // hand grabs whoever comes near, and then they're hanging, not standing
+  release(a1, b1); await wait(100);
+  place(B(), 1.0, STAND + 0.05);
+  for (let i = 0; i < 40 && !B().legs.some(l => l.shin && _debug.isStanding(B())); i++) await wait(50);
+  await wait(300);
+  const y0 = B().body.getPosition().y;
   b2.s.emit('gesture', 'flick', 1);
-  const traj = [];
-  const pushTop = await peak(bLegs, 700, (c) => { const y = c.body.getPosition().y; traj.push(y.toFixed(2) + '/' + c.body.getLinearVelocity().y.toFixed(1)); return y; });
+  const pushTop = await peak(B(), 700);
   check(pushTop > y0 + 1, `legs push launches the body (${y0.toFixed(2)} -> ${pushTop.toFixed(2)})`);
-  if (pushTop <= y0 + 1) console.log('  traj', traj.slice(0, 14).join(' '), '\n  holders', [...(_debug.climbers.values())].map(o => o.hands.map(h => h.grip ? h.grip.kind + ':' + h.grip.id : '-').join('|')).join(' ; '), '\n  debug: events', events.map(e => e.type).join(','), 'planted', bLegs.legs.map(l => !!l.plant), 'grips', bLegs.hands.map(h => !!h.joint), 'feet', bLegs.legs.map(l => l.shin.getWorldPoint(Vec2(0, -CONFIG.shin / 2)).y.toFixed(2)), 'torsoContacts', (() => { let n = 0; for (let ce = bLegs.body.getContactList(); ce; ce = ce.next) if (ce.contact.isTouching()) n++; return n; })());
-  // the legs player's moves can't move the hands, and the arms player's thumbs don't plant feet
   b2.s.emit('input', { l: true, r: true }); await wait(100);
-  check(!bLegs.hands.some(h => h.closed), 'legs player cannot close the hands');
+  check(!B().hands.some(h => h.closed), 'legs player cannot close the hands');
 
-  // ---- gap math: a normal hop (standing on the top rock) can't cross, the hanging combo can
+  // ---- THE WALL: a normal hop from the checkpoint can't reach the top, the twig combo can
   const g = CONFIG.gravity, rise = (v) => (v * v) / (2 * g);
   const handReach = CONFIG.shoulderY + CONFIG.upperArm + CONFIG.foreArm + CONFIG.grabRadius;
-  const standing = CONFIG.hipY + CONFIG.thigh + CONFIG.shin; // torso above the rock you stand on
-  const [gb, gt] = CONFIG.duoGaps[0];
-  const gapHeight = Math.min(...level.holds.filter(h => h.y >= gt).map(h => h.y)) - Math.max(...level.holds.filter(h => h.y <= gb).map(h => h.y));
-  const hopReach = standing + rise(CONFIG.legPushSpeed * 1.15 * (1 + CONFIG.flickJank)) + handReach;
-  const comboReach = -0.75 + rise(CONFIG.legPushSpeed + CONFIG.comboBonus) + handReach; // from hanging 0.75 m below the hold
-  check(hopReach < gapHeight, `strongest normal hop reaches ${hopReach.toFixed(2)}m < gap ${gapHeight.toFixed(2)}m`);
-  check(comboReach > gapHeight, `hanging combo reaches ${comboReach.toFixed(2)}m > gap ${gapHeight.toFixed(2)}m`);
+  const twig = holdsOf('twig')[0];
+  const lip = _debug.level.holds.filter(h => h.kind === 'knob' && Math.abs(h.y - 15) < 0.3).sort((p, q) => p.x - q.x)[0];
+  const ledgeY = 8;
+  const hopReach = ledgeY + STAND + rise(CONFIG.legPushSpeed * 1.15 * (1 + CONFIG.flickJank)) + handReach;
+  const comboReach = twig.y - 0.75 + rise(CONFIG.legPushSpeed + CONFIG.comboBonus) + handReach;
+  check(hopReach < lip.y, `strongest hop from the checkpoint reaches ${hopReach.toFixed(2)} m < wall top ${lip.y.toFixed(2)} m`);
+  check(comboReach > lip.y, `combo from the twig reaches ${comboReach.toFixed(2)} m > wall top ${lip.y.toFixed(2)} m`);
 
-  // ---- the real thing: hang under the first gap, legs hop, arms let go 120 ms later
-  const below = level.holds.filter(h => h.y <= gb).sort((p, q) => q.y - p.y)[0];
-  const nextUp = Math.min(...level.holds.filter(h => h.y >= gt).map(h => h.y));
-  for (const p of [a1, a2]) p.s.emit('input', { l: false, r: false, brace: false });
+  // the real thing: hang on the twig (feet against the wall), legs hop, arms let go 120 ms later
+  release(a1);
   await wait(200);
-  place(A(), below.x, below.y - 0.75);
-  A().hands.forEach(h => h.hand.setPosition(Vec2(below.x, below.y - 0.05)));
-  a1.s.emit('input', { aim: 0, ay: 0.9, brace: true, l: true, r: true });
-  a2.s.emit('input', { aim: 0, brace: false });
-  await wait(700);
-  check(A().hands.every(h => h.grip && h.grip.kind === 'hold'), 'A hangs under the gap with both hands');
+  place(A(), twig.x - 0.35, twig.y - 0.75);
+  A().hands.forEach(h => h.hand.setPosition(Vec2(twig.x, twig.y - 0.05)));
+  a1.s.emit('input', { aim: 0.3, ay: 0.9, brace: true, l: true, r: true });
+  a2.s.emit('input', { aim: 0.4, brace: false });
+  await wait(600);
+  check(A().hands.some(h => h.grip && h.grip.id === twig.id), 'A hangs on the twig');
   events.length = 0;
-  a2.s.emit('gesture', 'flick', 1); await wait(120); a1.s.emit('input', { aim: 0, ay: 0.9, l: false, r: false });
+  a2.s.emit('gesture', 'flick', 1); await wait(120); a1.s.emit('input', { aim: 0.3, ay: 0.9, l: false, r: false });
   const handTop = await peak(A(), 1100, (c) => Math.max(...c.hands.map(h => h.hand.getPosition().y)));
-  check(events.some(e => e.type === 'combo'), 'legs hop then arms let go within the window = combo');
-  check(handTop > nextUp - 0.5, `combo dyno gets the hands to the far side (${handTop.toFixed(2)} vs next hold ${nextUp.toFixed(2)})`);
+  check(events.some(e => e.type === 'combo'), 'feet against the wall still allow the combo (a wall is not footing)');
+  check(handTop > lip.y - 0.3, `combo from the twig gets the hands to the wall top (${handTop.toFixed(2)} vs ${lip.y.toFixed(2)})`);
 
-  // ---- arms tilt steers in the air
-  for (const p of [a1, a2]) p.s.emit('input', { l: false, r: false, aim: 0 });
+  // ---- the twig snaps if you hang on it too long
+  release(a1); await wait(300);
+  for (const h of holdsOf('twig')) h.brokenUntil = 0;
+  place(A(), twig.x - 0.35, twig.y - 0.75);
+  A().hands.forEach(h => h.hand.setPosition(Vec2(twig.x, twig.y - 0.05)));
+  a1.s.emit('input', { aim: 0.3, ay: 0.9, brace: true, l: true, r: true });
+  events.length = 0;
+  await wait(twig.breakMs + 800);
+  check(events.some(e => e.type === 'snap') && !A().hands.some(h => h.grip && h.grip.id === twig.id), `the twig snaps after ~${twig.breakMs / 1000} s and drops you`);
+
+  // ---- arms tilt steers in the air (open air above the pipe)
+  release(a1, a2);
   await wait(100);
-  place(A(), 6, 12);
+  place(A(), 12, 14);
   a1.s.emit('input', { aim: 1, ay: 0.6, l: false, r: false });
   await wait(30);
   const x0 = A().body.getPosition().x; await wait(400);
   check(A().body.getPosition().x - x0 > 0.4, `arms tilt steers the falling body (${(A().body.getPosition().x - x0).toFixed(2)} m right)`);
 
-  // ---- jumping past holds: a trailing foot must not snag under a hold (holds are one-way for feet)
+  // ---- holds are one-way for feet: flying up past a knob doesn't snag a trailing foot
   {
     let snags = 0;
-    for (const h of level.holds.filter(h => h.y > 1.5 && h.y < 2.5)) {
-      for (const p of [a1, a2]) p.s.emit('input', { aim: 0, ay: 0.6, l: false, r: false, brace: true });
-      place(A(), h.x, 1.0); await wait(400);
-      A().cdPush = 0; a2.s.emit('gesture', 'flick', 1);
-      let prev = 0;
-      for (let i = 0; i < 30; i++) { await wait(16); const vy = A().body.getLinearVelocity().y; if (prev > 3 && prev - vy > 1.2) snags++; prev = vy; }
+    for (const k of holdsOf('rung').slice(0, 4)) {
+      release(a1, a2);
+      place(A(), k.x, k.y - 1.3); await wait(50);
+      for (const b of bodies(A())) b.setLinearVelocity(Vec2(0, 7.5));
+      let prev = 7.5;
+      for (let i = 0; i < 20; i++) { await wait(16); const vy = A().body.getLinearVelocity().y; if (prev > 3 && prev - vy > 1.2) snags++; prev = vy; }
     }
-    check(snags === 0, `jumping up past holds never snags a foot (${snags} sudden stops)`);
+    check(snags === 0, `flying up past holds never snags a foot (${snags} sudden stops)`);
   }
 
-  // ---- holding hands + betrayal: B hangs off A's hand, A lets go -> a drop
+  // ---- holding hands + betrayal: B hangs off A's hand, A lets go -> a drop (on the ladder, open air)
   for (const p of [a1, a2, b1, b2]) p.s.emit('input', { l: false, r: false, brace: true });
   await wait(300);
-  const hold = level.holds.find(h => h.y > 3 && h.x > 2 && h.x < 10);
-  place(A(), hold.x, hold.y - 0.8);
-  A().hands[0].hand.setPosition(Vec2(hold.x, hold.y - 0.1));
+  const rung = holdsOf('rung')[4];
+  place(A(), rung.x, rung.y - 0.8);
+  A().hands[0].hand.setPosition(Vec2(rung.x, rung.y - 0.1));
   a1.s.emit('input', { aim: 0, ay: 0.9, brace: true, l: true, r: false });
   a2.s.emit('input', { aim: 0, brace: false }); b2.s.emit('input', { aim: 0, brace: false });
   await wait(300);
-  check(A().hands[0].grip && A().hands[0].grip.kind === 'hold', 'A hangs from a hold with the left hand');
+  check(A().hands[0].grip && A().hands[0].grip.kind === 'hold', 'A hangs from a ladder rung with the left hand');
   const ah = A().hands[1].hand.getPosition();
-  place(B(), ah.x + 0.7, ah.y - 0.7); // off to the side: bodies not touching
+  place(B(), ah.x + 0.9, ah.y - 0.7); // off to the side: bodies not touching, clear of the ladder
   B().hands[0].hand.setPosition(Vec2(ah.x + 0.05, ah.y));
   a1.s.emit('input', { aim: 0, ay: 0.9, brace: true, l: true, r: true });
   b1.s.emit('input', { aim: 0, ay: 0.9, brace: true, l: true, r: false });
@@ -162,6 +179,12 @@ server.listen(PORT, async () => {
   check(A().carry === 1, `A is carrying B (carry=${A().carry})`);
   const s0 = A().stamina; await wait(500);
   check(A().stamina < s0, `carrying drains A's stamina (${s0.toFixed(0)} -> ${A().stamina.toFixed(0)})`);
+
+  // ...and B can't hop off A to fly: holding a climber isn't footing
+  events.length = 0;
+  B().cdPush = 0; b2.s.emit('gesture', 'flick', 1); await wait(150);
+  check(!events.some(e => e.type === 'push' && e.id === B().id), 'no pushing off a climber you are holding in mid-air');
+
   events.length = 0;
   a1.s.emit('input', { aim: 0, ay: 0.9, brace: true, l: true, r: false });
   b1.s.emit('input', { aim: 0, brace: true, l: false, r: false });
@@ -177,6 +200,23 @@ server.listen(PORT, async () => {
   await wait(200);
   check(events.some(e => e.type === 'kick' && e.id === A().id && e.target === B().id), 'legs player kicks the rival next to their feet');
 
+  // ---- the cart rolls along the top and bonks a climber standing in its way
+  release(a1, b1); await wait(200);
+  place(A(), 10, 1.2); // out of the way
+  const cart = _debug.level.objects[0];
+  const dir = Math.sign(cart.body.getLinearVelocity().x) || 1;
+  place(B(), cart.body.getPosition().x + dir * 2.5, 15 + STAND + 0.05);
+  events.length = 0;
+  for (let i = 0; i < 60 && !events.some(e => e.type === 'bonk'); i++) await wait(50);
+  check(events.some(e => e.type === 'bonk' && e.id === B().id), 'the cart bonks a climber in its path');
+
+  // ---- touching the flag wins the race
+  release(a1, b1); await wait(100);
+  events.length = 0;
+  place(A(), COURSE.finish.x + 0.3, COURSE.finish.y + STAND + 0.05);
+  await wait(300);
+  check(last.phase === 'results' && last.winner === A().id, 'reaching the flag wins the race');
+
   // ---- bots + run for a while without crashing
   players[0].s.emit('addBot');
   players[0].s.emit('addBot');
@@ -184,6 +224,7 @@ server.listen(PORT, async () => {
   await wait(4000);
   check(last.c.length === 4, '2 teams + 2 bots in the next round');
   check(last.c.every(c => c.slice(1).every(v => typeof v !== 'number' || Number.isFinite(v))), 'physics stays finite after 4s with bots');
+  check(last.o && last.o.length === 1, 'snapshots carry the moving cart');
 
   // ---- someone leaves: their teammate keeps the climber and does both jobs
   b2.s.disconnect(); await wait(300);

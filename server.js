@@ -845,4 +845,4 @@ if (require.main === module) {
   }
 }
 // _debug: lets test/sim.js poke at the world directly (place climbers, read joints)
-module.exports = { server, io, startRound, CONFIG, _debug: { climbers, players, step, get level() { return level; }, onInput, onGesture } };
+module.exports = { server, io, startRound, CONFIG, _debug: { climbers, players, step, get level() { return level; }, onInput, onGesture, isStanding } };
