@@ -39,8 +39,8 @@ function certGoodFor(file) {
   const ips = Object.values(os.networkInterfaces()).flat()
     .filter((a) => a && a.family === 'IPv4' && !a.internal).map((a) => a.address);
   if (!ips.length) { console.log('No network connection found. Join Wi-Fi (or a phone hotspot) first.'); process.exit(1); }
-  console.log('Open this on the laptop (big screen); phones scan its QR code:');
-  for (const ip of ips) console.log(`  https://${ip.replace(/\./g, '-')}.local-ip.sh:${port}/screen.html`);
+  console.log('Big screen: open http://localhost:3000/screen.html on this laptop. Its QR code sends phones to:');
+  for (const ip of ips) console.log(`  https://${ip.replace(/\./g, '-')}.local-ip.sh:${port}/`);
   console.log('\nPhones must be on the same network. If they can\'t load it, the Wi-Fi blocks\n' +
     'device-to-device traffic: put the laptop and phones on a phone hotspot instead.\n');
 })().catch((e) => { console.error('Could not set up the LAN link:', e.message); process.exit(1); });
