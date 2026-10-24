@@ -8,6 +8,8 @@
 
 const express = require('express');
 const http = require('http');
+const https = require('https');
+const fs = require('fs');
 const path = require('path');
 const { Server } = require('socket.io');
 const planck = require('planck');
@@ -741,8 +743,16 @@ setInterval(() => {
 }, 1000 / CONFIG.sendRate);
 
 const PORT = process.env.PORT || 3000;
+const HTTPS_PORT = process.env.HTTPS_PORT || 3443;
 if (require.main === module) {
   server.listen(PORT, () => console.log(`Tethered running on http://localhost:${PORT}  (spectator: /screen.html)`));
+  // HTTPS on the local network (phones need https for motion). `npm run lan` fetches the cert.
+  const cert = path.join(__dirname, 'certs/server.pem'), key = path.join(__dirname, 'certs/server.key');
+  if (fs.existsSync(cert) && fs.existsSync(key)) {
+    const secure = https.createServer({ cert: fs.readFileSync(cert), key: fs.readFileSync(key) }, app);
+    io.attach(secure);
+    secure.listen(HTTPS_PORT, () => console.log(`HTTPS on port ${HTTPS_PORT} (see npm run lan for the phone link)`));
+  }
 }
 // _debug: lets test/sim.js poke at the world directly (place climbers, read joints)
 module.exports = { server, io, startRound, CONFIG, _debug: { climbers, players, step, get level() { return level; }, onInput, onGesture } };
