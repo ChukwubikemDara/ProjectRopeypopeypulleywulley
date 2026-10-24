@@ -49,9 +49,16 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const socket = Net.socket;
 
-  const url = location.origin + '/';
-  $('qr').src = '/qr.svg?url=' + encodeURIComponent(url);
-  $('joinUrl').textContent = url.replace(/^https?:\/\//, '');
+  // the QR phones scan: this page's own address, unless it's opened at localhost (phones can't use
+  // that), in which case show the local-Wi-Fi https link the server offers
+  function showJoin(url) {
+    $('qr').src = '/qr.svg?url=' + encodeURIComponent(url);
+    $('joinUrl').textContent = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+  }
+  showJoin(location.origin + '/');
+  if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+    fetch('/join-url').then(r => r.json()).then(({ url }) => { if (url) showJoin(url); }).catch(() => {});
+  }
 
   $('startBtn').onclick = $('againBtn').onclick = () => socket.emit('start');
   $('botBtn').onclick = () => socket.emit('addBot');
