@@ -523,9 +523,29 @@ if (Net.level) buildLevel(Net.level);
 Net.on('level', buildLevel);
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
+// adaptive quality: when frames get slow (busy / hot phone), render fewer pixels and refresh
+// shadows less often; when there's headroom again, step back up. Keeps the game smooth.
+const MAX_RATIO = Math.min(devicePixelRatio || 1, HI ? 2 : 1.5), MIN_RATIO = HI ? 1 : 0.6;
+const perf = { frames: 0, since: performance.now(), goodFor: 0, fps: 60 };
+let frameNo = 0;
+function adaptQuality(now) {
+  perf.frames++;
+  if (now - perf.since < 1000) return;
+  perf.fps = Math.round(perf.frames * 1000 / (now - perf.since));
+  perf.frames = 0; perf.since = now;
+  const r = renderer.getPixelRatio();
+  if (perf.fps < 45 && r > MIN_RATIO) { renderer.setPixelRatio(Math.max(MIN_RATIO, r - 0.2)); perf.goodFor = 0; }
+  else if (perf.fps >= 57 && r < MAX_RATIO && ++perf.goodFor >= 2) { renderer.setPixelRatio(Math.min(MAX_RATIO, r + 0.1)); perf.goodFor = 0; }
+  // still struggling at the lowest resolution: redraw shadows every other frame
+  renderer.shadowMap.autoUpdate = !(perf.fps < 45 && renderer.getPixelRatio() <= MIN_RATIO);
+  window.Render3D.fps = perf.fps;
+}
+
 let last = performance.now();
 renderer.setAnimationLoop(() => {
   const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now;
+  adaptQuality(now);
+  if (!renderer.shadowMap.autoUpdate && frameNo++ % 2 === 0) renderer.shadowMap.needsUpdate = true;
   const st = Net.sample();
   const seen = new Set();
   if (st && level) for (const c of st.climbers) {
@@ -544,4 +564,4 @@ renderer.setAnimationLoop(() => {
   frame(st, dt);
   renderer.render(scene, camera);
 });
-window.Render3D = { scene, camera, renderer };
+window.Render3D = { scene, camera, renderer, fps: 60 };

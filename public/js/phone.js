@@ -114,16 +114,24 @@
   // touches so both thumbs work at once.
   const pads = { l: false, r: false };
   const handsNow = () => ({ l: pads.l || !!Motion._keys.q, r: pads.r || !!Motion._keys.e });
-  let sentHands = { l: false, r: false };
+  let sentHands = { l: false, r: false }, lastTiltSend = 0;
   function sendInput(force) {
     if (!joined) return;
     const h = handsNow();
-    // send right away when the hands or the tilt change (tilt is what steers you mid-jump)
-    const aim = +Motion.aim.toFixed(2), ay = +Motion.ay.toFixed(2);
-    const tiltMoved = Math.abs(aim - (sentHands.aim ?? 9)) > 0.03 || Math.abs(ay - (sentHands.ay ?? 9)) > 0.03;
-    if (!force && h.l === sentHands.l && h.r === sentHands.r && !tiltMoved) return;
-    sentHands = { ...h, aim, ay };
-    socket.emit('input', { aim: +Motion.aim.toFixed(2), ay: +Motion.ay.toFixed(2), brace: Motion.brace, l: h.l, r: h.r });
+    const msg = { aim: +Motion.aim.toFixed(2), ay: +Motion.ay.toFixed(2), brace: Motion.brace, l: h.l, r: h.r };
+    // grabbing / letting go must arrive: send it reliably, right away
+    if (h.l !== sentHands.l || h.r !== sentHands.r || force) {
+      sentHands = { ...h, aim: msg.aim, ay: msg.ay };
+      return socket.emit('input', msg);
+    }
+    // tilt changes constantly while you hop: at most ~30/s, and "volatile" so a slow connection
+    // drops old tilts instead of queueing them (a queue is what makes lag build up)
+    const now = performance.now();
+    const tiltMoved = Math.abs(msg.aim - sentHands.aim) > 0.03 || Math.abs(msg.ay - sentHands.ay) > 0.03;
+    if (!tiltMoved || now - lastTiltSend < 33) return;
+    lastTiltSend = now;
+    sentHands = { ...h, aim: msg.aim, ay: msg.ay };
+    socket.volatile.emit('input', msg);
   }
   for (const [id, side] of [['padL', 'l'], ['padR', 'r']]) {
     const el = $(id);
@@ -134,8 +142,12 @@
   }
   addEventListener('keydown', () => sendInput());
   addEventListener('keyup', () => sendInput());
-  setInterval(() => sendInput(true), 100);          // heartbeat (brace, etc.)
-  (function tiltLoop() { requestAnimationFrame(tiltLoop); sendInput(); })(); // tilt changes go out each frame
+  setInterval(() => sendInput(true), 250);          // reliable heartbeat (brace, etc.)
+  (function tiltLoop() { requestAnimationFrame(tiltLoop); sendInput(); })(); // tilt checked every frame, sent ≤30/s
+
+  // connection check: round trip to the server, shown in the ⚙ panel (and logged if it gets bad)
+  let ping = 0;
+  setInterval(() => { const t = performance.now(); socket.timeout(2000).emit('rtt', (err) => { ping = err ? 2000 : Math.round(performance.now() - t); }); }, 1000);
 
   // ---------- HUD + motion check, every frame
   let lastGesture = 0;
@@ -173,7 +185,8 @@
     });
     ['footL', 'footR'].forEach((id, i) => $(id).classList.toggle('planted', !!(me && me.legs && me.legs[i].planted)));
     if (!$('debug').classList.contains('hidden')) {
-      $('readout').textContent = `vertical ${Motion.vertical.toFixed(1)} · energy ${Motion.energy.toFixed(2)} · aim ${Motion.aim.toFixed(2)},${Motion.ay.toFixed(2)} · ${Net.role} · motion ${Motion.enabled ? 'on' : 'keyboard'}`;
+      const R = window.Render3D;
+      $('readout').textContent = `ping ${ping}ms · ${R ? R.fps : '?'} fps @ ${R ? R.renderer.getPixelRatio().toFixed(2) : '?'}x · vertical ${Motion.vertical.toFixed(1)} · energy ${Motion.energy.toFixed(2)} · aim ${Motion.aim.toFixed(2)},${Motion.ay.toFixed(2)} · ${Net.role} · motion ${Motion.enabled ? 'on' : 'keyboard'}`;
     }
   }
   frame();

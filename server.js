@@ -681,6 +681,7 @@ io.on('connection', (socket) => {
     leaveTeam(p); newClimberFor(p);
     pushRoster();
   });
+  socket.on('rtt', (ack) => { if (typeof ack === 'function') ack(); });
   socket.on('input', (m) => {
     const p = players.get(socket.id); if (!p || !m) return;
     onInput(p, m);
