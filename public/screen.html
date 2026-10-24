@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tethered — Spectator</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="screen">
+<div id="game"></div>
+
+<aside id="side">
+  <div class="logo">TETHERED</div>
+  <div class="tag">four friends · eight hands · zero trust</div>
+  <div id="qrBox">
+    <img id="qr" alt="Join QR code">
+    <div class="fine center" id="joinUrl"></div>
+  </div>
+  <div class="card">
+    <div class="row between"><b>Climbers</b><span class="fine" id="count"></span></div>
+    <ul id="players"></ul>
+  </div>
+  <div class="row gap">
+    <button id="startBtn" class="big">Start round</button>
+  </div>
+  <div class="row gap">
+    <button id="botBtn" class="ghost">+ Bot</button>
+    <button id="clearBots" class="ghost">Clear bots</button>
+    <button id="tuneBtn" class="ghost">Tune (D)</button>
+  </div>
+  <div id="feed"></div>
+</aside>
+
+<section id="tune" class="hidden"><b>Live physics tuning</b><div id="sliders"></div></section>
+
+<section id="results" class="panel hidden">
+  <div class="logo small">ROUND OVER</div>
+  <div id="winnerName" class="winner"></div>
+  <ul id="awards"></ul>
+  <button id="againBtn" class="big">Play again</button>
+</section>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/net.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const socket = Net.socket;
+
+  const url = location.origin + '/';
+  $('qr').src = '/qr.svg?url=' + encodeURIComponent(url);
+  $('joinUrl').textContent = url.replace(/^https?:\/\//, '');
+
+  $('startBtn').onclick = $('againBtn').onclick = () => socket.emit('start');
+  $('botBtn').onclick = () => socket.emit('addBot');
+  $('clearBots').onclick = () => socket.emit('clearBots');
+  const toggleTune = () => $('tune').classList.toggle('hidden');
+  $('tuneBtn').onclick = toggleTune;
+  addEventListener('keydown', e => { if (e.key.toLowerCase() === 'd') toggleTune(); });
+
+  Net.on('roster', (r) => {
+    $('players').innerHTML = r.map(c => `<li class="team-row"><i style="background:${c.color}"></i><div>${c.bot ? esc(c.name) + ' <span class="fine">bot</span>'
+      : c.members.map(m => `<span class="member">${esc(m.name)} <em>${m.role === 'both' ? 'arms+legs' : m.role}</em></span>`).join('')}</div></li>`).join('');
+    $('count').textContent = r.length + ' joined';
+  });
+  Net.on('phase', p => { if (p === 'playing') $('results').classList.add('hidden'); document.body.classList.toggle('playing', p === 'playing'); });
+  Net.on('results', (awards) => {
+    $('results').classList.remove('hidden');
+    const win = awards.find(a => a.val === 'summit');
+    $('winnerName').innerHTML = win ? `<i style="background:${Net.colorOf(win.id)}"></i>${esc(Net.nameOf(win.id))} reached the summit` : '';
+    $('awards').innerHTML = awards.filter(a => a.val !== 'summit').map(a => `<li><b>${esc(a.title)}</b><span><i style="background:${Net.colorOf(a.id)}"></i>${esc(Net.nameOf(a.id))} · ${a.val}</span></li>`).join('');
+  });
+
+  // betrayal feed
+  const words = {
+    drop: (e) => `💔 ${Net.nameOf(e.id)} dropped ${Net.nameOf(e.victim)}`,
+    throw: (e) => `🚀 ${Net.nameOf(e.id)} threw ${Net.nameOf(e.target)}`,
+    yank: (e) => `⤓ ${Net.nameOf(e.id)} yanked ${Net.nameOf(e.target)}${e.held ? ' (held on)' : ''}`,
+    shake: (e) => `🫨 ${Net.nameOf(e.id)} shook off ${Net.nameOf(e.victim)}${e.held ? ' (held on)' : ''}`,
+    handhold: (e) => `🤝 ${Net.nameOf(e.id)} grabbed ${Net.nameOf(e.target)}'s hand`,
+    grabbed: (e) => `✊ ${Net.nameOf(e.id)} grabbed onto ${Net.nameOf(e.target)}`,
+    boost: (e) => `⤒ ${Net.nameOf(e.id)} stood on ${Net.nameOf(e.by)}`,
+    save: (e) => `🛟 ${Net.nameOf(e.id)} is carrying someone`,
+    fall: (e) => `↓ ${Net.nameOf(e.id)} fell ${e.m}m`,
+    combo: (e) => `⚡ ${Net.nameOf(e.id)} pulled + pushed in sync`,
+    kick: (e) => `👟 ${Net.nameOf(e.id)} kicked ${Net.nameOf(e.target)}${e.held ? ' (held on)' : ''}`,
+  };
+  Net.on('event', (e) => {
+    if (!words[e.type]) return;
+    const d = document.createElement('div'); d.textContent = words[e.type](e);
+    $('feed').prepend(d); while ($('feed').children.length > 7) $('feed').lastChild.remove();
+  });
+
+  // live tuning sliders
+  Net.on('config', (C) => {
+    const T = Net.tunable; if (!T) return;
+    if ($('sliders').children.length) {   // already built: just sync values (don't break an active drag)
+      $('sliders').querySelectorAll('input').forEach(el => { if (el !== document.activeElement) { el.value = C[el.dataset.k]; el.nextElementSibling.textContent = C[el.dataset.k]; } });
+      return;
+    }
+    $('sliders').innerHTML = Object.entries(T).map(([k, [min, max, step]]) =>
+      `<label>${k}<input type="range" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${C[k]}"><span>${C[k]}</span></label>`).join('');
+    $('sliders').querySelectorAll('input').forEach(el => el.oninput = () => {
+      el.nextElementSibling.textContent = el.value;
+      socket.emit('tune', { key: el.dataset.k, value: +el.value });
+    });
+  });
+})();
+</script>
+<script type="importmap">{ "imports": { "three": "/lib/three/three.module.min.js", "three/addons/": "/lib/three/addons/" } }</script>
+<script type="module" src="/js/render3d.js"></script>
+</body>
+</html>
