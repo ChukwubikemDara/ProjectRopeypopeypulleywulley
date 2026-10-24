@@ -21,7 +21,7 @@ const FINISH = { x: 49, y: TOP.y };
 const terrain = [
   { kind: 'rock', pts: [[-3, -3], [23, -3], [23, 0], [-3, 0]] },                      // start ground + under the pipe
   { kind: 'pipe', pts: slab(0, len, -SLAB, 0), friction: 0.9 },                        // pipe floor
-  { kind: 'pipe', pts: slab(-1.2, len - 1.2, PIPE_GAP, PIPE_GAP + SLAB), friction: 0.15 }, // pipe ceiling: its outside top is the slippery SHORTCUT
+  { kind: 'pipe', pts: slab(0, len - 1.2, PIPE_GAP, PIPE_GAP + SLAB), friction: 0.15 }, // pipe ceiling: its outside top is the slippery SHORTCUT
   { kind: 'rock', pts: [[LEDGE.x0, -3], [LEDGE.x1, -3], [LEDGE.x1, LEDGE.y], [LEDGE.x0, LEDGE.y]] }, // checkpoint ledge
   { kind: 'rock', pts: [[TOP.x0, -3], [TOP.x1, -3], [TOP.x1, TOP.y], [TOP.x0, TOP.y]] },             // THE WALL + top ledge
   { kind: 'beam', pts: [[23.6, 16.3], [28.1, 16.3], [28.1, 16.7], [23.6, 16.7]] },    // overhang the ladder hangs from
@@ -40,7 +40,9 @@ const hold = (x, y, kind, extra) => holds.push({ id: holds.length, x: +x.toFixed
 // ceiling handles inside the pipe: monkey bars
 for (let s = 1.5; s < len - 1.2; s += 1.6) { const [x, y] = at(s, PIPE_GAP - 0.3); hold(x, y, 'handle'); }
 // SHORTCUT: a few knobs on the slippery top of the pipe
-for (const s of [-0.6, 3.2, 7.2, 11.2, 14.6]) { const [x, y] = at(s, PIPE_GAP + SLAB + 0.25); hold(x, y, 'knob'); }
+// (the first one sits right on the roof's front edge, so you can reach it from the start ground)
+{ const [x, y] = at(0.2, PIPE_GAP + SLAB + 0.12); hold(x, y, 'knob'); }
+for (const s of [3.8, 7.4, 11.2, 14.6]) { const [x, y] = at(s, PIPE_GAP + SLAB + 0.25); hold(x, y, 'knob'); }
 // THE WALL: one twig halfway up (it snaps if you hang on it too long), then the lip at the top
 hold(TOP.x0 - 0.2, 11.2, 'twig', { breakMs: 2500, regrowMs: 6000 });
 hold(TOP.x0 - 0.05, TOP.y + 0.05, 'knob');
@@ -72,7 +74,7 @@ const signs = [
 module.exports = {
   name: 'The Long Way Up',
   bounds: { x0: -2, x1: 52, y0: -1, y1: 20 },
-  spawn: { x0: 0.8, x1: 3.6, y: 0 },
+  spawn: { x0: 0.6, x1: 2.6, y: 0 }, // clear of the pipe mouth so nobody starts under its roof
   finish: { x: FINISH.x, y: FINISH.y, zoneX: FINISH.x - 0.8 },
   pipe: { f0: F0, f1: F1, gap: PIPE_GAP, slab: SLAB, dir: D, normal: N, length: +len.toFixed(3) },
   terrain, holds, objects, path, signs,

@@ -313,13 +313,13 @@ function buildLevel(L) {
     const R = P.gap / 2 + P.slab / 2;
     const ang = Math.atan2(P.dir[1], P.dir[0]);
     const mid = [P.f0[0] + P.dir[0] * P.length / 2 + P.normal[0] * (P.gap / 2), P.f0[1] + P.dir[1] * P.length / 2 + P.normal[1] * (P.gap / 2)];
-    const tube = new THREE.Mesh(new THREE.CylinderGeometry(R, R, P.length + 1.2, 40, 1, true, Math.PI / 2, Math.PI), metalMat);
+    const tube = new THREE.Mesh(new THREE.CylinderGeometry(R, R, P.length, 40, 1, true, Math.PI / 2, Math.PI), metalMat);
     tube.rotation.z = ang - Math.PI / 2;
-    tube.position.set(mid[0] - P.dir[0] * 0.6, mid[1] - P.dir[1] * 0.6, 0.15);
+    tube.position.set(mid[0], mid[1], 0.15);
     tube.receiveShadow = true;
     levelGroup.add(tube);
-    for (const s of [-1.2, P.length * 0.33, P.length * 0.66, P.length]) {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(R + 0.06, s === -1.2 || s === P.length ? 0.16 : 0.07, 10, 40), rustMat);
+    for (const s of [0, P.length * 0.33, P.length * 0.66, P.length]) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(R + 0.06, s === 0 || s === P.length ? 0.16 : 0.07, 10, 40), rustMat);
       ring.position.set(P.f0[0] + P.dir[0] * s + P.normal[0] * (P.gap / 2), P.f0[1] + P.dir[1] * s + P.normal[1] * (P.gap / 2), 0.15);
       ring.rotation.y = Math.PI / 2; ring.rotation.x = 0;
       ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(P.dir[0], P.dir[1], 0));
