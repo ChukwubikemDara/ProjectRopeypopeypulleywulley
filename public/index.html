@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tethered">
+<meta name="theme-color" content="#0e1020">
+<link rel="manifest" href="/manifest.json">
+<title>Tethered</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="phone">
+<div id="game"></div>
+
+<!-- join -->
+<section id="join" class="panel">
+  <div class="brand">
+    <div class="logo">TETHERED</div>
+    <div class="tag">four friends · eight hands · zero trust</div>
+  </div>
+  <input id="name" maxlength="14" placeholder="Your name" autocomplete="off" autocapitalize="words">
+  <button id="joinBtn" class="big">Join</button>
+  <p class="fine" id="joinNote">Tip: Share → Add to Home Screen for full screen.</p>
+</section>
+
+<!-- lobby + motion test -->
+<section id="lobby" class="panel hidden">
+  <div class="logo small">TETHERED</div>
+  <div class="card role-card">
+    <div class="row between"><b id="roleTitle" class="role-title">You are…</b><span id="teamPill" class="pill team"></span></div>
+    <div id="roleHow" class="fine role-how"></div>
+    <div class="row gap"><button id="swapRole" class="ghost">Swap arms ⇄ legs</button><button id="switchTeam" class="ghost">New team</button></div>
+  </div>
+  <div class="card">
+    <div class="row between"><b>Motion check</b><span id="steady" class="pill">STEADY</span></div>
+    <div class="aimpad"><div id="aimDot"></div></div>
+    <div class="row between fine"><span id="gestureTest">try the moves</span><span id="aimText"></span></div>
+    <div class="row gap"><button id="centerAim" class="ghost">Hold it comfy, tap to center</button><button id="flipAim" class="ghost">Flip ⇄</button></div>
+  </div>
+  <div class="card">
+    <div class="row between"><b>Teams</b><span class="fine" id="count"></span></div>
+    <p class="fine">Two phones per climber. Tap <b>Join</b> on your friend's team.</p>
+    <ul id="players"></ul>
+  </div>
+  <p class="fine center" id="waitNote"></p>
+  <button id="startBtn" class="big">Start round</button>
+  <button id="botBtn" class="ghost">+ Add a bot (for testing)</button>
+</section>
+
+<!-- in-game HUD -->
+<section id="hud" class="hidden">
+  <div class="top">
+    <div class="height"><span id="height">0</span><small>m</small></div>
+    <div class="stamina"><div id="stamina"></div></div>
+    <span id="hudSteady" class="pill">STEADY</span>
+  </div>
+  <div id="hint"></div>
+  <div id="comboFlash">COMBO!</div>
+  <div id="danger"><span>HOLD STILL!</span></div>
+  <div id="legsHud" class="bottom legs hidden">
+    <div id="footL" class="foot">L FOOT</div>
+    <div id="pushBox" class="pushbox"><b id="pushText">HOP TO JUMP</b><span class="fine">shove forward = kick</span></div>
+    <div id="footR" class="foot">R FOOT</div>
+  </div>
+  <div id="armsHud" class="bottom">
+    <button id="padL" class="pad left" aria-label="left hand"><svg viewBox="0 0 64 64" class="open"><path d="M22 56c-6 0-9-5-9-11V21c0-7 5-12 12-12s12 5 12 12v8l6-6c3-3 8-2 9 2 1 3 0 5-2 7L40 47c-3 6-8 9-13 9z"/><rect x="17" y="52" width="22" height="8" rx="3"/></svg><svg viewBox="0 0 64 64" class="fist"><path d="M14 30c0-9 7-15 18-15s18 6 18 15v6c0 9-7 15-18 15S14 45 14 36z"/><path class="line" d="M24 19v10M32 17v12M40 19v10"/><rect x="21" y="49" width="22" height="8" rx="3"/></svg><b>LEFT HAND</b></button>
+    <button id="padR" class="pad right" aria-label="right hand"><svg viewBox="0 0 64 64" class="open"><path d="M22 56c-6 0-9-5-9-11V21c0-7 5-12 12-12s12 5 12 12v8l6-6c3-3 8-2 9 2 1 3 0 5-2 7L40 47c-3 6-8 9-13 9z"/><rect x="17" y="52" width="22" height="8" rx="3"/></svg><svg viewBox="0 0 64 64" class="fist"><path d="M14 30c0-9 7-15 18-15s18 6 18 15v6c0 9-7 15-18 15S14 45 14 36z"/><path class="line" d="M24 19v10M32 17v12M40 19v10"/><rect x="21" y="49" width="22" height="8" rx="3"/></svg><b>RIGHT HAND</b></button>
+  </div>
+</section>
+
+<!-- results -->
+<section id="results" class="panel hidden">
+  <div class="logo small">ROUND OVER</div>
+  <div id="winnerName" class="winner"></div>
+  <ul id="awards"></ul>
+  <button id="againBtn" class="big">Play again</button>
+</section>
+
+<!-- debug / tuning -->
+<button id="gear" class="gear" aria-label="settings">⚙</button>
+<section id="debug" class="hidden">
+  <b>Gesture tuning</b>
+  <label>Flick strength <input type="range" id="tFlick" min="6" max="25" step="0.5"><span></span></label>
+  <label>Steadiness limit <input type="range" id="tStill" min="0.5" max="4" step="0.1"><span></span></label>
+  <label>Kick strength <input type="range" id="tKick" min="6" max="30" step="0.5"><span></span></label>
+  <div class="fine mono" id="readout"></div>
+  <button id="closeDebug" class="ghost">Close</button>
+</section>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="/js/net.js"></script>
+<script src="/js/motion.js"></script>
+<script src="/js/sound.js"></script>
+<script src="/js/phone.js"></script>
+<script type="importmap">{ "imports": { "three": "/lib/three/three.module.min.js", "three/addons/": "/lib/three/addons/" } }</script>
+<script type="module" src="/js/render3d.js"></script>
+</body>
+</html>
