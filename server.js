@@ -362,13 +362,17 @@ function setHand(c, i, closed) {
 
 function onGesture(p, g, power) {
   const c = climbers.get(p.climberId);
-  if (phase !== 'playing' || !c || !c.body) return;
+  if (phase !== 'playing' || !c || !c.body) return 'not playing';
   if (process.env.DEBUG) console.log(new Date().toISOString().slice(11, 23), 'gesture', p.name, roleOf(p), g, 'power', power);
   const t = now(), role = roleOf(p);
-  if (role === 'arms') return; // the arms only tilt and grip
-  if (g === 'flick' || g === 'push') return doPush(c, t, power);
-  if (g === 'yank' || g === 'tuck') { c.tuckUntil = t + 700; return; }
-  if (g === 'kick') return doKick(c, t);
+  if (role === 'arms') return 'arms cannot jump'; // the arms only tilt and grip
+  if (g === 'flick' || g === 'push') {
+    const r = doPush(c, t, power);
+    if (process.env.DEBUG && r !== 'pushed' && r !== 'combo') console.log(new Date().toISOString().slice(11, 23), 'push IGNORED', p.name, r);
+    return r;
+  }
+  if (g === 'yank' || g === 'tuck') { c.tuckUntil = t + 700; return 'tuck'; }
+  if (g === 'kick') { doKick(c, t); return 'kick'; }
 }
 
 function comboDone(c, t) {
@@ -400,17 +404,17 @@ function pushDirection(c) {
 // stand on, or the wall while the hands hold on. Normal climbing: feet on a rock, arms let go, legs hop.
 // Combo: hanging with no footing, legs hop against the wall and the arms let go together = launch.
 function doPush(c, t, power) {
-  if (t < c.cdPush) return;
+  if (t < c.cdPush) return 'cooldown';
   const letGoJustNow = !gripCount(c) && t - c.lastLetGo < CONFIG.comboWindow * 1000;
   const feetDown = feetOnRock(c) || t - c.lastFoot < 250 || gripCount(c) > 0 || isStanding(c) || letGoJustNow;
-  if (!feetDown) return;
+  if (!feetDown) return 'no footing';
   c.cdPush = t + 400;
   c.lastPush = t;
   c.pushHanging = gripCount(c) > 0 && !feetOnRock(c); // smearing the wall while the hands hold on
   c.stats.pushes++;
   emitEvent('push', { id: c.id });
   // the arms let go of a hanging position first, then the hop: launch
-  if (letGoJustNow && c.letGoHanging && launch(c, t)) return;
+  if (letGoJustNow && c.letGoHanging && launch(c, t)) return 'combo';
   const strength = Math.max(0.6, Math.min(1.15, typeof power === "number" ? power : 1));
   let speed = CONFIG.legPushSpeed * strength * (1 + (Math.random() * 2 - 1) * CONFIG.flickJank);
   // standing on a climber who holds on = boost off them (they get shoved down)
@@ -424,6 +428,7 @@ function doPush(c, t, power) {
   // powered briefly: a one-off kick gets soaked up by the limbs. Hands still holding? You only
   // push into your arms, until they let go.
   c.pushUntil = t + 160; c.pushDir = pushDirection(c); c.pushSpeed = speed;
+  return 'pushed';
 }
 
 // legs, shove the phone forward: kick whoever is near your feet
@@ -681,13 +686,19 @@ io.on('connection', (socket) => {
     leaveTeam(p); newClimberFor(p);
     pushRoster();
   });
-  socket.on('rtt', (ack) => { if (typeof ack === 'function') ack(); });
+  socket.on('rtt', (ack) => { if (typeof ack === 'function') ack(now()); }); // server clock, for snapshot age
   socket.on('input', (m) => {
     const p = players.get(socket.id); if (!p || !m) return;
     onInput(p, m);
-    if (process.env.DEBUG && now() - (p.loggedAt || 0) > 1000) { p.loggedAt = now(); console.log(new Date().toISOString().slice(11, 23), 'input', p.name, roleOf(p), JSON.stringify(m)); }
+    // phones report their lag numbers with the heartbeat: log them once a second
+    if (process.env.DEBUG && m.lag && now() - (p.loggedAt || 0) > 1000) { p.loggedAt = now(); console.log(new Date().toISOString().slice(11, 23), 'lag', p.name, roleOf(p), JSON.stringify(m.lag)); }
   });
-  socket.on('gesture', (g, power) => { const p = players.get(socket.id); if (p) onGesture(p, g, power); });
+  // the ack tells the phone how long the hop took to land, and whether it counted
+  socket.on('gesture', (g, power, ack) => {
+    const p = players.get(socket.id);
+    const r = p ? onGesture(p, g, power) : 'not joined';
+    if (typeof ack === 'function') ack(r || 'ok');
+  });
   socket.on('start', () => { if (climbers.size >= 1) startRound(); });
   // back to the lobby without a winner (e.g. a round nobody is finishing)
   socket.on('endRound', () => {

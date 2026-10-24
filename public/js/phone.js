@@ -108,7 +108,12 @@
   Motion.onGesture = (g, power) => {
     if (Net.role === 'arms') return; // the arms only tilt and grip
     flashGesture(g);
-    socket.emit('gesture', g, power);
+    if (g === 'flick') { $('hopFlash').classList.remove('show'); void $('hopFlash').offsetWidth; $('hopFlash').classList.add('show'); }
+    const t0 = performance.now();
+    socket.timeout(2000).emit('gesture', g, power, (err, result) => {
+      lag.hop = err ? 2000 : Math.round(performance.now() - t0);
+      lag.result = err ? 'lost' : result;
+    });
   };
   // hands: hold a pad (or Q / E on a laptop) to close that hand. Each pad tracks its own
   // touches so both thumbs work at once.
@@ -122,6 +127,7 @@
     // grabbing / letting go must arrive: send it reliably, right away
     if (h.l !== sentHands.l || h.r !== sentHands.r || force) {
       sentHands = { ...h, aim: msg.aim, ay: msg.ay };
+      if (force) msg.lag = { ...lag, snap: Math.round(Net.snapAge), fps: window.Render3D ? window.Render3D.fps : 0 }; // shows up in the server log
       return socket.emit('input', msg);
     }
     // tilt changes constantly while you hop: at most ~30/s, and "volatile" so a slow connection
@@ -146,8 +152,21 @@
   (function tiltLoop() { requestAnimationFrame(tiltLoop); sendInput(); })(); // tilt checked every frame, sent ≤30/s
 
   // connection check: round trip to the server, shown in the ⚙ panel (and logged if it gets bad)
-  let ping = 0;
-  setInterval(() => { const t = performance.now(); socket.timeout(2000).emit('rtt', (err) => { ping = err ? 2000 : Math.round(performance.now() - t); }); }, 1000);
+  // lag check: ping (round trip), hop (hop -> server confirmed), snap (how stale the picture is)
+  const lag = { ping: 0, hop: 0, result: '' };
+  let bestPing = Infinity;
+  setInterval(() => {
+    const t = performance.now();
+    socket.timeout(2000).emit('rtt', (err, serverNow) => {
+      lag.ping = err ? 2000 : Math.round(performance.now() - t);
+      // estimate the server's clock from the fastest recent round trip
+      if (!err && typeof serverNow === 'number' && lag.ping <= bestPing * 1.5) {
+        bestPing = Math.min(bestPing, lag.ping);
+        Net.clockOffset = serverNow + lag.ping / 2 - Date.now();
+      }
+    });
+  }, 1000);
+  setInterval(() => { bestPing *= 1.2; }, 10000); // let the estimate adapt if the network changes
 
   // ---------- HUD + motion check, every frame
   let lastGesture = 0;
@@ -159,6 +178,8 @@
   }
   function frame() {
     requestAnimationFrame(frame);
+    const R3 = window.Render3D;
+    $('lagbox').textContent = `ping ${lag.ping} · hop ${lag.hop}${lag.result && lag.result !== 'pushed' ? ' (' + lag.result + ')' : ''} · snap ${Math.round(Net.snapAge)}ms · ${R3 ? R3.fps : '?'}fps`;
     // lobby pointer check: arms see the 2D hand target, legs see left/right lean
     $('aimDot').style.left = (50 + Motion.aim * 45) + '%';
     $('aimDot').style.top = (Net.role === 'legs' ? 50 : 50 - Motion.ay * 42) + '%';
@@ -186,7 +207,7 @@
     ['footL', 'footR'].forEach((id, i) => $(id).classList.toggle('planted', !!(me && me.legs && me.legs[i].planted)));
     if (!$('debug').classList.contains('hidden')) {
       const R = window.Render3D;
-      $('readout').textContent = `ping ${ping}ms · ${R ? R.fps : '?'} fps @ ${R ? R.renderer.getPixelRatio().toFixed(2) : '?'}x · vertical ${Motion.vertical.toFixed(1)} · energy ${Motion.energy.toFixed(2)} · aim ${Motion.aim.toFixed(2)},${Motion.ay.toFixed(2)} · ${Net.role} · motion ${Motion.enabled ? 'on' : 'keyboard'}`;
+      $('readout').textContent = `ping ${lag.ping}ms · ${R ? R.fps : '?'} fps @ ${R ? R.renderer.getPixelRatio().toFixed(2) : '?'}x · vertical ${Motion.vertical.toFixed(1)} · energy ${Motion.energy.toFixed(2)} · aim ${Motion.aim.toFixed(2)},${Motion.ay.toFixed(2)} · ${Net.role} · motion ${Motion.enabled ? 'on' : 'keyboard'}`;
     }
   }
   frame();

@@ -9,6 +9,8 @@
     roster: [], results: null, phase: 'lobby',
     buffer: [],            // [{at, snap}] for interpolation
     delay: 50,             // ms we render behind the server (smooths jitter; ~2 snapshots at 45/s)
+    clockOffset: null,     // server clock - our clock (set by the phone's ping), to measure snapshot age
+    snapAge: 0,            // how old snapshots are when they arrive (ms): grows if the network queues them
     on(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
     fire(type, data) { (listeners[type] || []).forEach(fn => fn(data)); },
     nameOf(id) { const p = Net.roster.find(r => r.id === id); return p ? p.name : '?'; },
@@ -61,6 +63,7 @@
   s.on('connect', () => Net.fire('connect'));
   s.on('disconnect', () => Net.fire('disconnect'));
   s.on('s', snap => {
+    if (Net.clockOffset !== null) Net.snapAge += ((Date.now() + Net.clockOffset - snap.t) - Net.snapAge) * 0.1;
     Net.buffer.push({ at: performance.now(), snap });
     if (Net.buffer.length > 30) Net.buffer.shift();
     if (snap.phase !== Net.phase) { Net.phase = snap.phase; Net.fire('phase', snap.phase); }

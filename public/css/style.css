@@ -153,3 +153,9 @@ li.team-row div { display: flex; flex-wrap: wrap; gap: 4px 10px; }
 li.team-row div { flex: 1; }
 li.team-row.mine { background: rgba(255,255,255,.06); border-radius: 10px; padding: 6px; margin: -6px; }
 button.join { flex: none; padding: 8px 14px; border-radius: 10px; font-weight: 900; background: var(--gold); color: #1b1404; }
+#lagbox { position: absolute; left: 12px; top: calc(env(safe-area-inset-top) + 52px); font: 700 11px ui-monospace, monospace; color: rgba(255,255,255,.75);
+  background: rgba(0,0,0,.4); padding: 3px 7px; border-radius: 8px; }
+#hopFlash { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 140px); transform: translateX(-50%); font-weight: 900; font-size: 22px;
+  color: #1b1404; background: var(--gold); padding: 4px 14px; border-radius: 99px; opacity: 0; pointer-events: none; }
+#hopFlash.show { animation: hop .45s ease-out; }
+@keyframes hop { 0% { opacity: 1; transform: translateX(-50%) scale(1.2); } 100% { opacity: 0; transform: translateX(-50%) scale(1); } }
