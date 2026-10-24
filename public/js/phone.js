@@ -193,7 +193,7 @@
     const st = Net.sample();
     const me = st && st.climbers.find(c => c.id === Net.me);
     if (me && Net.level) {
-      $('height').textContent = Math.max(0, Math.round(me.y));
+      $('height').textContent = Math.round(Net.progress(me.x, me.y) * 100); // % of the course
       $('stamina').style.width = me.stamina + '%';
       $('stamina').classList.toggle('low', me.stamina < 30);
     }
