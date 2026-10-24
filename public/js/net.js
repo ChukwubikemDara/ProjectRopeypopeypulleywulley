@@ -8,7 +8,7 @@
     level: null, config: null, tunable: null,
     roster: [], results: null, phase: 'lobby',
     buffer: [],            // [{at, snap}] for interpolation
-    delay: 90,             // ms we render behind the server (smooths jitter)
+    delay: 50,             // ms we render behind the server (smooths jitter; ~2 snapshots at 45/s)
     on(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
     fire(type, data) { (listeners[type] || []).forEach(fn => fn(data)); },
     nameOf(id) { const p = Net.roster.find(r => r.id === id); return p ? p.name : '?'; },

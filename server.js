@@ -377,6 +377,7 @@ function comboDone(c, t) {
   c.stats.combos++;
   emitEvent('combo', { id: c.id });
 }
+const bodiesOf = (c) => [c.body, ...c.hands.flatMap(h => [h.upper, h.fore, h.hand]), ...c.legs.flatMap(l => [l.thigh, l.shin])];
 // the combo: the body launches while the hands are off the wall; closed hands catch whatever they pass
 function launch(c, t) {
   if (t - c.lastCombo < CONFIG.comboCooldown * 1000) return false;
@@ -497,8 +498,17 @@ function step() {
     }
     if (feetOnRock(c)) c.lastFoot = t;
 
-    // arms tilt steers you through the air
-    if (!gripCount(c)) c.body.applyForceToCenter(Vec2((c.aim || 0) * CONFIG.airControl * weight, 0), true);
+    // arms tilt steers you through the air: it sets your sideways speed directly (a gentle force
+    // took ~0.5 s to build up and felt laggy on top of the network delay)
+    // It steers the whole climber (centre of mass), otherwise the arms swinging toward the tilt
+    // kick the body the opposite way first and steering feels delayed.
+    if (!gripCount(c) && !feetOnRock(c)) {
+      const parts = bodiesOf(c);
+      let m = 0, mvx = 0;
+      for (const b of parts) { m += b.getMass(); mvx += b.getMass() * b.getLinearVelocity().x; }
+      const dvx = ((c.aim || 0) * CONFIG.airSpeed - mvx / m) * Math.min(1, CONFIG.airGrip * DT);
+      for (const b of parts) { const v = b.getLinearVelocity(); b.setLinearVelocity(Vec2(v.x + dvx, v.y)); }
+    }
     if (t < c.pushUntil) {
       const v = c.body.getLinearVelocity(), along = Vec2.dot(v, c.pushDir);
       if (along < c.pushSpeed) c.body.setLinearVelocity(Vec2.add(v, Vec2.mul(c.pushDir, c.pushSpeed - along)));

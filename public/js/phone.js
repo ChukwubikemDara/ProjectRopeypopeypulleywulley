@@ -118,8 +118,11 @@
   function sendInput(force) {
     if (!joined) return;
     const h = handsNow();
-    if (!force && h.l === sentHands.l && h.r === sentHands.r) return;
-    sentHands = h;
+    // send right away when the hands or the tilt change (tilt is what steers you mid-jump)
+    const aim = +Motion.aim.toFixed(2), ay = +Motion.ay.toFixed(2);
+    const tiltMoved = Math.abs(aim - (sentHands.aim ?? 9)) > 0.03 || Math.abs(ay - (sentHands.ay ?? 9)) > 0.03;
+    if (!force && h.l === sentHands.l && h.r === sentHands.r && !tiltMoved) return;
+    sentHands = { ...h, aim, ay };
     socket.emit('input', { aim: +Motion.aim.toFixed(2), ay: +Motion.ay.toFixed(2), brace: Motion.brace, l: h.l, r: h.r });
   }
   for (const [id, side] of [['padL', 'l'], ['padR', 'r']]) {
@@ -131,7 +134,8 @@
   }
   addEventListener('keydown', () => sendInput());
   addEventListener('keyup', () => sendInput());
-  setInterval(() => sendInput(true), 50);
+  setInterval(() => sendInput(true), 100);          // heartbeat (brace, etc.)
+  (function tiltLoop() { requestAnimationFrame(tiltLoop); sendInput(); })(); // tilt changes go out each frame
 
   // ---------- HUD + motion check, every frame
   let lastGesture = 0;

@@ -49,7 +49,8 @@ const CONFIG = {
   // jumping (legs only) + steering (arms only)
   flickJank: 0.1,         // +/- random power on every hop (Foddian pain)
   boostMult: 1.7,         // hopping while standing on a climber who holds on
-  airControl: 0.6,        // arms tilt pushes you sideways in the air, in body weights
+  airSpeed: 4.5,          // full arms tilt in the air = this sideways speed (m/s)
+  airGrip: 10,            // how fast you reach it (1/s): ~0.1 s to respond
 
   // grip + stamina. "Carrying" = people hanging off your hands with no hold of their own
   maxCarryFidgeting: 0,   // moving your phone? one dangling friend rips you off (after 0.5 s)
@@ -59,7 +60,7 @@ const CONFIG = {
   staminaRegen: 18,
 
   // network
-  sendRate: 30,           // snapshots per second
+  sendRate: 45,           // snapshots per second
 };
 
 // sliders shown on the spectator screen: [min, max, step]
@@ -71,7 +72,8 @@ const TUNABLE = {
   armK: [5, 80, 1],
   armStrength: [0.5, 4, 0.1],
   grabRadius: [0.15, 0.8, 0.01],
-  airControl: [0, 2, 0.05],
+  airSpeed: [0, 10, 0.25],
+  airGrip: [1, 30, 0.5],
   handSpread: [0, 0.6, 0.02],
   legPushSpeed: [2, 14, 0.25],
   comboBonus: [0, 10, 0.25],
