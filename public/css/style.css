@@ -159,3 +159,12 @@ button.join { flex: none; padding: 8px 14px; border-radius: 10px; font-weight: 9
   color: #1b1404; background: var(--gold); padding: 4px 14px; border-radius: 99px; opacity: 0; pointer-events: none; }
 #hopFlash.show { animation: hop .45s ease-out; }
 @keyframes hop { 0% { opacity: 1; transform: translateX(-50%) scale(1.2); } 100% { opacity: 0; transform: translateX(-50%) scale(1); } }
+/* ---------- race standings (big screen) */
+#standings { gap: 6px; }
+li.standing { display: grid; grid-template-columns: 18px 14px 1fr 70px 38px; align-items: center; gap: 6px; font-size: 14px; }
+li.standing .pos { color: var(--dim); font-weight: 900; }
+li.standing i { margin: 0; }
+li.standing .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+li.standing .bar { height: 8px; border-radius: 99px; background: rgba(255,255,255,.1); overflow: hidden; }
+li.standing .bar span { display: block; height: 100%; border-radius: 99px; transition: width .25s; }
+li.standing b { text-align: right; }

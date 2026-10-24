@@ -29,6 +29,7 @@
     <button id="clearBots" class="ghost">Clear bots</button>
     <button id="tuneBtn" class="ghost">Tune (D)</button>
   </div>
+  <div id="race" class="card hidden"><b>Race</b><ul id="standings"></ul></div>
   <div id="feed"></div>
 </aside>
 
@@ -67,6 +68,17 @@
   const toggleTune = () => $('tune').classList.toggle('hidden');
   $('tuneBtn').onclick = toggleTune;
   addEventListener('keydown', e => { if (e.key.toLowerCase() === 'd') toggleTune(); });
+
+  // live race standings: everyone's % along the course, leader first
+  setInterval(() => {
+    const st = Net.sample();
+    const racing = st && st.phase === 'playing' && st.climbers.length && Net.level;
+    $('race').classList.toggle('hidden', !racing);
+    if (!racing) return;
+    const rows = st.climbers.map(c => ({ id: c.id, p: Net.progress(c.x, c.y) })).sort((a, b) => b.p - a.p);
+    $('standings').innerHTML = rows.map((r, i) => `<li class="standing"><span class="pos">${i + 1}</span><i style="background:${Net.colorOf(r.id)}"></i>` +
+      `<span class="who">${esc(Net.nameOf(r.id))}</span><span class="bar"><span style="width:${Math.round(r.p * 100)}%;background:${Net.colorOf(r.id)}"></span></span><b>${Math.round(r.p * 100)}%</b></li>`).join('');
+  }, 250);
 
   Net.on('roster', (r) => {
     $('players').innerHTML = r.map(c => `<li class="team-row"><i style="background:${c.color}"></i><div>${c.bot ? esc(c.name) + ' <span class="fine">bot</span>'
