@@ -484,6 +484,43 @@ function doKick(c, t) {
   }
 }
 
+// ---------------------------------------------------------------- moving and breakable things
+// the cart rolls between its two ends; holds on it ride along
+function moveObjects() {
+  for (const o of level.objects) {
+    const x = o.body.getPosition().x;
+    if (x >= o.x1) o.body.setLinearVelocity(Vec2(-o.speed, 0));
+    else if (x <= o.x0) o.body.setLinearVelocity(Vec2(o.speed, 0));
+  }
+  for (const h of level.holds) if (h.body) { const w = h.body.getWorldPoint(h.local); h.x = w.x; h.y = w.y; }
+}
+// the cart rams your body: you get knocked back and up (it doesn't care if you were holding on)
+function bonkCheck(c, t) {
+  if (t < c.cdBonk) return;
+  for (let ce = c.body.getContactList(); ce; ce = ce.next) {
+    if (!ce.contact.isTouching() || ce.other.getType() !== 'kinematic') continue;
+    const cart = ce.other, v = cart.getLinearVelocity();
+    const away = Math.sign(c.body.getPosition().x - cart.getPosition().x) || Math.sign(v.x) || 1;
+    for (const b of bodiesOf(c)) b.setLinearVelocity(Vec2.add(b.getLinearVelocity(), Vec2(away * 4.5, 3.5)));
+    c.cdBonk = t + 800;
+    emitEvent('bonk', { id: c.id });
+    return;
+  }
+}
+// the twig bends under you and snaps if you hang on it too long; it regrows a few seconds later
+function strainTwigs(t) {
+  for (const hold of level.holds) {
+    if (!hold.breakMs || hold.brokenUntil > t) continue;
+    const on = [];
+    for (const c of climbers.values()) for (const h of c.hands || []) if (h.grip && h.grip.kind === 'hold' && h.grip.id === hold.id) on.push([c, h]);
+    hold.loadMs = on.length ? hold.loadMs + DT * 1000 : Math.max(0, hold.loadMs - DT * 500);
+    if (hold.loadMs < hold.breakMs) continue;
+    for (const [c, h] of on) release(c, h, 'snapped');
+    hold.brokenUntil = t + hold.regrowMs; hold.loadMs = 0;
+    emitEvent('snap', { id: on[0][0].id, hold: hold.id });
+  }
+}
+
 // ---------------------------------------------------------------- simulation step
 const DT = 1 / 60;
 // muscle: pull `part` toward `target`, push the torso the opposite way (internal force, no free flying)
@@ -503,6 +540,7 @@ function step() {
   for (const c of climbers.values()) {
     if (!c.body) continue;
     if (c.bot) botThink(c, t);
+    bonkCheck(c, t);
     if (c.wantClosed) { c.wantClosed.forEach((v, i) => setHand(c, i, v)); c.wantClosed = null; }
     const p = c.body.getPosition();
     const weight = c.mass * CONFIG.gravity;
@@ -566,6 +604,8 @@ function step() {
     if (p.x >= COURSE.finish.zoneX && p.y >= COURSE.finish.y - 0.3 && phase === 'playing') { phase = 'results'; winner = c.id; emitEvent('win', { id: c.id }); }
   }
 
+  moveObjects();
+  strainTwigs(t);
   world.step(DT, 10, 6);
 
   // carrying people -> stamina drain / grip break. Counted, not measured: joint forces spike
@@ -653,6 +693,10 @@ function snapshot() {
       return [c.id, +p.x.toFixed(3), +p.y.toFixed(3), c.braced ? 1 : 0, Math.round(c.stamina), +((c.aim || 0).toFixed(2)), c.air ? 1 : 0,
         ...handState(c.hands[0]), ...handState(c.hands[1]), ...legState(c.legs[0]), ...legState(c.legs[1])];
     }),
+    // moving objects [id, x, y], snapped holds, and how close each strained twig is to snapping (0-1)
+    o: level.objects.map(o => { const p = o.body.getPosition(); return [o.id, r2(p.x), r2(p.y)]; }),
+    b: level.holds.filter(h => h.brokenUntil > t).map(h => h.id),
+    w: level.holds.filter(h => h.breakMs && h.loadMs > 0).map(h => [h.id, r2(h.loadMs / h.breakMs)]),
     ev: events.splice(0),
   };
 }
