@@ -169,3 +169,125 @@ function startRound() {
   emitEvent('start', {});
 }
 
+// ---------------------------------------------------------------- grip
+const holdGrips = (c) => c.hands.filter(h => h.grip && h.grip.kind === 'hold').length;
+const gripCount = (c) => c.hands.filter(h => h.joint).length;
+const feetOnRock = (c) => c.legs.some(l => footContact(l));
+const anchored = (c) => holdGrips(c) > 0 || feetOnRock(c);
+
+function tryGrab(c, h) {
+  const hp = h.hand.getPosition();
+  // holds first: a hold snaps the fist onto it
+  let best = null, bd = CONFIG.grabRadius;
+  for (const hold of level.holds) {
+    const d = Math.hypot(hold.x - hp.x, hold.y - hp.y);
+    if (d < bd) { bd = d; best = hold; }
+  }
+  if (best) {
+    const at = Vec2(best.x, best.y);
+    h.hand.setPosition(at); h.hand.setLinearVelocity(Vec2(0, 0));
+    h.joint = world.createJoint(new RevoluteJoint({}, ground, h.hand, at));
+    h.grip = { kind: 'hold', id: best.id };
+    return gripped(c, h);
+  }
+  // then other climbers: their hands (holding hands) or their body
+  for (const o of climbers.values()) {
+    if (o === c || !o.body) continue;
+    const oh = o.hands.find(x => Vec2.distance(hp, x.hand.getPosition()) < CONFIG.handRadius * 2 + CONFIG.climberGrab);
+    const target = oh ? oh.hand : (Vec2.distance(hp, o.body.getPosition()) < CONFIG.radius + CONFIG.climberGrab ? o.body : null);
+    if (!target) continue;
+    h.joint = world.createJoint(new RevoluteJoint({}, h.hand, target, hp));
+    h.grip = { kind: 'climber', id: o.id };
+    emitEvent(oh ? 'handhold' : 'grabbed', { id: c.id, target: o.id });
+    return gripped(c, h);
+  }
+}
+function gripped(c, h) {
+  h.since = now();
+  if (h.grip.kind === 'hold') emitEvent('grab', { id: c.id });
+}
+
+// reason: undefined = you let go on purpose; otherwise you were forced off
+function release(c, h, reason) {
+  if (!h.joint) return;
+  world.destroyJoint(h.joint);
+  const g = h.grip;
+  h.joint = null; h.grip = null;
+  h.noGripUntil = now() + (reason ? 400 : 120);
+  // letting go of someone who has nothing else to hang on to = betrayal
+  if (!reason && g.kind === 'climber') {
+    const o = climbers.get(g.id);
+    if (o && o.body && !anchored(o) && !isStanding(o) && !heldBySomeoneElse(o, c)) {
+      c.stats.drops++;
+      emitEvent('drop', { id: c.id, victim: o.id });
+    }
+  }
+}
+function releaseAll(c, reason, lockMs) {
+  if (!gripCount(c)) return;
+  for (const h of c.hands) { release(c, h, reason); h.noGripUntil = now() + lockMs; }
+  emitEvent('slip', { id: c.id, reason });
+}
+function heldBySomeoneElse(o, except) {
+  for (const x of climbers.values()) {
+    if (x === except || x === o || !x.body) continue;
+    if (x.hands.some(h => h.grip && h.grip.kind === 'climber' && h.grip.id === o.id)) return true;
+  }
+  return false;
+}
+
+// climbers linked to c by a hand, in either direction
+function linkedTo(c) {
+  const out = new Set();
+  for (const h of c.hands) if (h.grip && h.grip.kind === 'climber') out.add(h.grip.id);
+  for (const o of climbers.values()) {
+    if (o !== c && o.body && o.hands.some(h => h.grip && h.grip.kind === 'climber' && h.grip.id === c.id)) out.add(o.id);
+  }
+  return out;
+}
+// how many people hang off you: linked climbers with no hold and no floor, and everyone hanging off them
+function danglingFrom(c) {
+  const seen = new Set([c.id]), stack = [c];
+  let n = 0;
+  while (stack.length) {
+    for (const id of linkedTo(stack.pop())) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const o = climbers.get(id);
+      if (!o || !o.body || anchored(o) || isStanding(o)) continue;
+      n++; stack.push(o);
+    }
+  }
+  return n;
+}
+
+function touchingClimberBelow(c, anchoredOnly = false) {
+  const p = c.body.getPosition();
+  for (const o of climbers.values()) {
+    if (o === c || !o.body) continue;
+    if (anchoredOnly && !anchored(o)) continue;
+    const q = o.body.getPosition();
+    const feet = c.legs.map(footPoint);
+    if (q.y < p.y - 0.1 && (Vec2.distance(p, q) < CONFIG.radius * 2 + 0.25 || feet.some(f => Vec2.distance(f, q) < CONFIG.radius + CONFIG.footRadius + 0.1))) return o;
+  }
+  return null;
+}
+// what a foot is resting on right now: 'ground' (floor/hold) or null
+function footContact(l) {
+  for (let ce = l.shin.getContactList(); ce; ce = ce.next) {
+    if (!ce.contact.isTouching()) continue;
+    const fa = ce.contact.getFixtureA(), fb = ce.contact.getFixtureB();
+    const mine = fa.getBody() === l.shin ? fa : fb;
+    if (mine.getFilterCategoryBits() === CAT.FOOT && ce.other === ground) return 'ground';
+  }
+  return null;
+}
+function isStanding(c) {
+  // torso on the floor/walls, a foot resting on the floor/a rock, or standing on a climber
+  for (let ce = c.body.getContactList(); ce; ce = ce.next) {
+    if (ce.contact.isTouching() && ce.other === ground) return true;
+  }
+  if (feetOnRock(c)) return true;
+  return !!touchingClimberBelow(c);
+}
+
