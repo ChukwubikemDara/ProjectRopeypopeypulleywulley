@@ -574,3 +574,147 @@ function botThink(c, t) {
   } else doPush(c, t, 1);
 }
 
+// ---------------------------------------------------------------- networking
+function roster() {
+  return [...climbers.values()].map(c => ({
+    id: c.id, name: c.bot ? c.name : teamName(c), color: c.color, bot: !!c.bot,
+    members: humans(c).map(p => ({ id: p.id, name: p.name, role: roleOf(p) })),
+  }));
+}
+const pushRoster = () => io.emit('roster', roster());
+const r2 = (v) => Math.round(v * 100) / 100;
+function handState(h) {
+  const hp = h.hand.getPosition(), e = h.upper.getWorldPoint(Vec2(0, CONFIG.upperArm / 2));
+  const flags = (h.closed ? 1 : 0) | (h.joint ? 2 : 0) | (h.grip && h.grip.kind === 'climber' ? 4 : 0);
+  return [r2(hp.x), r2(hp.y), r2(e.x), r2(e.y), flags];
+}
+function legState(l) {
+  const k = l.thigh.getWorldPoint(Vec2(0, -CONFIG.thigh / 2)), f = footPoint(l);
+  return [r2(k.x), r2(k.y), r2(f.x), r2(f.y), footContact(l) ? 1 : 0];
+}
+// climber: [id, x, y, braced, stamina, aim, air, L hand: hx, hy, ex, ey, flags, R hand: ...,
+//           L leg: kx, ky, fx, fy, on a rock, R leg: ...]
+function snapshot() {
+  const t = now();
+  return {
+    phase, winner, t,
+    elapsed: phase === 'playing' ? (t - roundStart) / 1000 : 0,
+    c: [...climbers.values()].filter(c => c.body).map(c => {
+      const p = c.body.getPosition();
+      return [c.id, +p.x.toFixed(3), +p.y.toFixed(3), c.braced ? 1 : 0, Math.round(c.stamina), +((c.aim || 0).toFixed(2)), c.air ? 1 : 0,
+        ...handState(c.hands[0]), ...handState(c.hands[1]), ...legState(c.legs[0]), ...legState(c.legs[1])];
+    }),
+    ev: events.splice(0),
+  };
+}
+function results() {
+  const list = [...climbers.values()].filter(c => c.stats);
+  const top = (k) => list.slice().sort((a, b) => b.stats[k] - a.stats[k])[0];
+  const award = (title, c, val) => c && val > 0 ? { title, id: c.id, val } : null;
+  return [
+    winner && { title: 'King of the Mountain', id: winner, val: 'summit' },
+    award('In Sync (pull + push combos)', top('combos'), top('combos')?.stats.combos),
+    award('Kickboxer (kicks)', top('kicks'), top('kicks')?.stats.kicks),
+    award('Backstabber (friends dropped)', top('drops'), top('drops')?.stats.drops),
+    award('Leg Day (pushes)', top('pushes'), top('pushes')?.stats.pushes),
+    award('Stepping Stool (boosts)', top('boosts'), top('boosts')?.stats.boosts),
+    award('Biggest Fall', top('biggestFall'), Math.round(top('biggestFall')?.stats.biggestFall) + 'm'),
+  ].filter(Boolean);
+}
+
+io.on('connection', (socket) => {
+  socket.emit('config', { CONFIG, TUNABLE });
+  if (level) socket.emit('level', level);
+  socket.emit('roster', roster());
+  socket.emit('you', socket.id);
+
+  socket.on('join', ({ name } = {}) => {
+    if (players.has(socket.id)) return;
+    const p = { id: socket.id, name: String(name || 'Climber').slice(0, 14), climberId: null, role: 'arms' };
+    players.set(socket.id, p);
+    const team = openTeam();
+    if (team) joinTeam(p, team); else newClimberFor(p);
+    if (process.env.DEBUG) console.log('join', p.name, '->', p.climberId, p.role, socket.handshake.headers['user-agent']?.slice(0, 80));
+    pushRoster();
+  });
+  // lobby: trade arms/legs with your teammate
+  socket.on('swapRole', () => {
+    const p = players.get(socket.id); if (!p) return;
+    const c = climbers.get(p.climberId); if (!c) return;
+    for (const x of humans(c)) x.role = x.role === 'arms' ? 'legs' : 'arms';
+    c.name = teamName(c); pushRoster();
+  });
+  // lobby: move to a team with a free seat (or start your own)
+  socket.on('switchTeam', () => {
+    const p = players.get(socket.id); if (!p) return;
+    const old = climbers.get(p.climberId);
+    const team = openTeam(old);
+    if (!team && old && humans(old).length === 1) return; // already alone: nowhere better to go
+    leaveTeam(p);
+    if (team) joinTeam(p, team); else newClimberFor(p);
+    if (process.env.DEBUG) console.log('join', p.name, '->', p.climberId, p.role, socket.handshake.headers['user-agent']?.slice(0, 80));
+    pushRoster();
+  });
+  // lobby: pick a team explicitly (any team with a free seat), or start a new one
+  socket.on('joinTeam', (id) => {
+    const p = players.get(socket.id); if (!p) return;
+    const c = climbers.get(id);
+    if (!c || c.bot || c.id === p.climberId || humans(c).length >= 2) return;
+    leaveTeam(p); joinTeam(p, c);
+    if (process.env.DEBUG) console.log('joinTeam', p.name, '->', c.id, p.role);
+    pushRoster();
+  });
+  socket.on('newTeam', () => {
+    const p = players.get(socket.id); if (!p) return;
+    const old = climbers.get(p.climberId);
+    if (old && humans(old).length === 1) return; // already alone
+    leaveTeam(p); newClimberFor(p);
+    pushRoster();
+  });
+  socket.on('input', (m) => {
+    const p = players.get(socket.id); if (!p || !m) return;
+    onInput(p, m);
+    if (process.env.DEBUG && now() - (p.loggedAt || 0) > 1000) { p.loggedAt = now(); console.log(new Date().toISOString().slice(11, 23), 'input', p.name, roleOf(p), JSON.stringify(m)); }
+  });
+  socket.on('gesture', (g, power) => { const p = players.get(socket.id); if (p) onGesture(p, g, power); });
+  socket.on('start', () => { if (climbers.size >= 1) startRound(); });
+  socket.on('addBot', () => {
+    const id = 'bot' + (++seq);
+    climbers.set(id, { id, bot: true, name: 'Bot ' + seq, color: freeColor(), aim: 0, hands: [], legs: [] });
+    pushRoster();
+  });
+  socket.on('clearBots', () => {
+    for (const [id, c] of climbers) if (c.bot) { removeClimberBodies(c); climbers.delete(id); }
+    pushRoster();
+  });
+  socket.on('tune', ({ key, value } = {}) => {
+    if (key in TUNABLE && typeof value === 'number') {
+      CONFIG[key] = value;
+      if (key === 'gravity' && world) world.setGravity(Vec2(0, -value));
+      io.emit('config', { CONFIG, TUNABLE });
+    }
+  });
+  socket.on('disconnect', () => {
+    const p = players.get(socket.id);
+    if (!p) return;
+    leaveTeam(p);
+    players.delete(socket.id);
+    pushRoster();
+  });
+});
+
+resetWorld();
+setInterval(step, DT * 1000);
+let lastPhase = phase;
+setInterval(() => {
+  io.volatile.emit('s', snapshot());
+  if (phase === 'results' && lastPhase !== 'results') io.emit('results', results());
+  lastPhase = phase;
+}, 1000 / CONFIG.sendRate);
+
+const PORT = process.env.PORT || 3000;
+if (require.main === module) {
+  server.listen(PORT, () => console.log(`Tethered running on http://localhost:${PORT}  (spectator: /screen.html)`));
+}
+// _debug: lets test/sim.js poke at the world directly (place climbers, read joints)
+module.exports = { server, io, startRound, CONFIG, _debug: { climbers, players, step, get level() { return level; }, onInput, onGesture } };
