@@ -13,6 +13,20 @@
     snapAge: 0,            // how old snapshots are when they arrive (ms): grows if the network queues them
     on(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
     fire(type, data) { (listeners[type] || []).forEach(fn => fn(data)); },
+    // how far along the course's racing line a point is: 0 at the start, 1 at the flag
+    progress(x, y) {
+      const P = Net.level && Net.level.path;
+      if (!P) return 0;
+      let total = 0, best = { d: Infinity, at: 0 };
+      for (let i = 0; i < P.length - 1; i++) {
+        const [ax, ay] = P[i], [bx, by] = P[i + 1], L = Math.hypot(bx - ax, by - ay);
+        const t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / (L * L)));
+        const d = Math.hypot(x - (ax + (bx - ax) * t), y - (ay + (by - ay) * t));
+        if (d < best.d) best = { d, at: total + L * t };
+        total += L;
+      }
+      return best.at / total;
+    },
     nameOf(id) { const p = Net.roster.find(r => r.id === id); return p ? p.name : '?'; },
     colorOf(id) { const p = Net.roster.find(r => r.id === id); return p ? p.color : '#fff'; },
 
@@ -41,7 +55,10 @@
           hands, legs, gripping: hands.some(h => h.grip),
         };
       });
-      return { climbers, phase: B.snap.phase, winner: B.snap.winner, elapsed: B.snap.elapsed };
+      // moving objects (the cart), interpolated like the climbers
+      const prevO = new Map((A.snap.o || []).map(o => [o[0], o]));
+      const objects = (B.snap.o || []).map(o => { const q = prevO.get(o[0]) || o; return { id: o[0], x: q[1] + (o[1] - q[1]) * k, y: q[2] + (o[2] - q[2]) * k }; });
+      return { climbers, objects, broken: B.snap.b || [], strain: B.snap.w || [], phase: B.snap.phase, winner: B.snap.winner, elapsed: B.snap.elapsed };
     },
   };
 
