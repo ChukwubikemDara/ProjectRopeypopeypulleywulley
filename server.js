@@ -291,3 +291,38 @@ function isStanding(c) {
   return !!touchingClimberBelow(c);
 }
 
+// ---------------------------------------------------------------- players, teams, roles
+const humans = (c) => [...players.values()].filter(p => p.climberId === c.id);
+// what a player actually controls: alone on a climber you do both jobs
+function roleOf(p) {
+  const c = climbers.get(p.climberId);
+  return c && humans(c).length > 1 ? p.role : 'both';
+}
+function teamName(c) {
+  if (c.bot) return c.name;
+  const hs = humans(c).sort((a, b) => (a.role === 'arms' ? -1 : 1));
+  return hs.map(p => p.name).join(' + ') || c.name;
+}
+function joinTeam(p, c) {
+  const taken = humans(c).map(x => x.role);
+  p.climberId = c.id;
+  p.role = taken.includes('arms') ? 'legs' : 'arms';
+  c.name = teamName(c);
+}
+function newClimberFor(p) {
+  const id = 'c' + (++seq);
+  const c = { id, name: p.name, color: freeColor(), aim: 0, braceInput: true, legBrace: true, hands: [], legs: [] };
+  climbers.set(id, c);
+  joinTeam(p, c);
+  return c;
+}
+function leaveTeam(p) {
+  const c = climbers.get(p.climberId);
+  p.climberId = null;
+  if (!c) return;
+  if (!humans(c).length && !c.bot) { removeClimberBodies(c); climbers.delete(c.id); }
+  else { c.name = teamName(c); for (const o of humans(c)) o.role = 'arms'; }
+}
+// a team with exactly one human has a free seat
+const openTeam = (except) => [...climbers.values()].find(c => !c.bot && c !== except && humans(c).length === 1);
+
