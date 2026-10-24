@@ -16,7 +16,7 @@ const planck = require('planck');
 const QRCode = require('qrcode');
 const { CONFIG, TUNABLE } = require('./config');
 
-const { Vec2, World, Circle, Box, RevoluteJoint } = planck;
+const { Vec2, World, Circle, Box, Polygon, RevoluteJoint } = planck;
 
 const app = express();
 const server = http.createServer(app);
@@ -35,28 +35,25 @@ app.get('/qr.svg', async (req, res) => {
 });
 
 // ---------------------------------------------------------------- level
-// World units are meters, y points UP. The cliff is CONFIG.width wide and CONFIG.top tall.
-// Holds are points hands grab and feet stand on. "Duo gaps" are bands with no holds: too tall for
-// one move, so the arms and legs players have to pull and push at the same moment.
-function buildLevel(seed = 7) {
-  let s = seed;
-  const rand = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-  const holds = [];
-  const gaps = CONFIG.duoGaps; // [[bottom, top], ...]
-  // friendly starter row so the first jump works for everyone
-  for (let i = 0; i < 7; i++) holds.push({ id: holds.length, x: 0.9 + i * (CONFIG.width - 1.8) / 6, y: 1.9 });
-  let y = 3.4;
-  while (y < CONFIG.top - 1) {
-    const inGap = gaps.find(([a, b]) => y > a && y < b);
-    if (inGap) { y = inGap[1]; continue; }
-    const n = 4 + Math.floor(rand() * 2);
-    for (let i = 0; i < n; i++) {
-      const lane = (i + rand() * 0.8) / n;
-      holds.push({ id: holds.length, x: 0.8 + lane * (CONFIG.width - 1.6), y: y + rand() * 0.4 });
-    }
-    y += CONFIG.holdSpacing + rand() * 0.35;
+// The race course lives in course.js (pure data: terrain, holds, moving objects, the racing line).
+// World units are meters, y points UP.
+const COURSE = require('./course');
+// what clients get: the course minus physics-only state (bodies, timers)
+function levelForClients() {
+  return { ...COURSE, holds: level.holds.map(({ id, x, y, kind, objectId }) => ({ id, x, y, kind, objectId })) };
+}
+// how far along the racing line a point is: 0 at the start, 1 at the flag
+function progressAt(x, y) {
+  const P = COURSE.path;
+  let total = 0, best = { d: Infinity, at: 0 };
+  for (let i = 0; i < P.length - 1; i++) {
+    const [ax, ay] = P[i], [bx, by] = P[i + 1], L = Math.hypot(bx - ax, by - ay);
+    const t = Math.max(0, Math.min(1, ((x - ax) * (bx - ax) + (y - ay) * (by - ay)) / (L * L)));
+    const d = Math.hypot(x - (ax + (bx - ax) * t), y - (ay + (by - ay) * t));
+    if (d < best.d) best = { d, at: total + L * t };
+    total += L;
   }
-  return { holds, gaps, width: CONFIG.width, top: CONFIG.top };
+  return best.at / total;
 }
 
 // ---------------------------------------------------------------- game state
@@ -80,14 +77,25 @@ function emitEvent(type, data) { events.push({ type, ...data }); }
 function resetWorld() {
   world = new World({ gravity: Vec2(0, -CONFIG.gravity) });
   ground = world.createBody();
-  const W = CONFIG.width, T = CONFIG.top + 6;
-  // thick boxes, not thin edges: a hard landing can poke a foot through an edge and trap it underneath
-  ground.createFixture(new Box(W / 2 + 2, 1, Vec2(W / 2, -1), 0), { friction: 0.8 });
-  ground.createFixture(new Box(1, T / 2, Vec2(-1, T / 2), 0), { friction: 0.2 });
-  ground.createFixture(new Box(1, T / 2, Vec2(W + 1, T / 2), 0), { friction: 0.2 });
-  level = buildLevel();
-  // holds are solid only to feet: you can stand on them, hands grab them by distance
+  // terrain: solid polygons (thick, so a hard landing can't poke a foot through and trap it)
+  for (const t of COURSE.terrain) {
+    ground.createFixture(new Polygon(t.pts.map(([x, y]) => Vec2(x, y))), { friction: t.friction ?? 0.8 });
+  }
+  level = { holds: COURSE.holds.map(h => ({ ...h, loadMs: 0, brokenUntil: 0 })), objects: [] };
+  // moving objects (kinematic: they push climbers, nothing pushes them). Their handles are holds that ride along.
+  for (const o of COURSE.objects) {
+    const body = world.createBody({ type: 'kinematic', position: Vec2(o.x0, o.y) });
+    body.createFixture(new Box(o.w / 2, o.h / 2), { friction: 0.9 });
+    body.setLinearVelocity(Vec2(o.speed, 0));
+    const obj = { ...o, body, bonked: new Map() };
+    level.objects.push(obj);
+    for (const [lx, ly] of o.handles || []) {
+      level.holds.push({ id: level.holds.length, x: o.x0 + lx, y: o.y + ly, kind: 'handle', objectId: o.id, body, local: Vec2(lx, ly), loadMs: 0, brokenUntil: 0 });
+    }
+  }
+  // static holds are solid only to feet: you can stand on them, hands grab them by distance
   for (const h of level.holds) {
+    if (h.body) continue;
     const f = ground.createFixture(new Circle(Vec2(h.x, h.y), 0.12), { friction: 1.2, filterCategoryBits: CAT.HOLD, filterMaskBits: CAT.FOOT });
     f.setUserData({ hold: h.id });
   }
@@ -108,8 +116,9 @@ function resetWorld() {
 
 // ---------------------------------------------------------------- climber bodies
 function spawnClimber(c, index, total) {
-  const x = CONFIG.width * (index + 1) / (total + 1);
-  const standY = CONFIG.hipY + CONFIG.thigh + CONFIG.shin + CONFIG.footRadius + 0.03;
+  const { x0, x1, y } = COURSE.spawn;
+  const x = x0 + (x1 - x0) * (index + 0.5) / Math.max(1, total);
+  const standY = y + CONFIG.hipY + CONFIG.thigh + CONFIG.shin + CONFIG.footRadius + 0.03;
   c.body = world.createBody({ type: 'dynamic', position: Vec2(x, standY), fixedRotation: true, linearDamping: 0.05 });
   c.body.createFixture(new Circle(CONFIG.radius), {
     density: 1, friction: 0.6, restitution: 0.05, filterCategoryBits: CAT.TORSO, filterMaskBits: CAT.WORLD | CAT.TORSO | CAT.FOOT,
@@ -119,7 +128,7 @@ function spawnClimber(c, index, total) {
   const limbMass = (b) => b.getMass();
   c.mass = c.body.getMass() + c.hands.reduce((m, h) => m + limbMass(h.upper) + limbMass(h.fore) + limbMass(h.hand), 0)
     + c.legs.reduce((m, l) => m + limbMass(l.thigh) + limbMass(l.shin), 0);
-  c.stamina = 100; c.carry = 0; c.overSince = 0; c.peakY = 0; c.airPeak = null; c.air = false;
+  c.stamina = 100; c.carry = 0; c.overSince = 0; c.peakY = 0; c.progress = 0; c.cdBonk = 0; c.airPeak = null; c.air = false;
   c.cdPush = 0; c.cdKick = 0; c.pushUntil = 0; c.tuckUntil = 0;
   c.lastPush = 0; c.lastLetGo = 0; c.lastFoot = 0; c.lastCombo = 0; c.holdingSince = 0; c.savedCounted = false;
   c.stats = { drops: 0, saves: 0, biggestFall: 0, boosts: 0, combos: 0, kicks: 0, pushes: 0 };
@@ -183,7 +192,7 @@ function startRound() {
   list.sort(() => Math.random() - 0.5);
   list.forEach((c, i) => spawnClimber(c, i, list.length));
   phase = 'playing'; winner = null; roundStart = now();
-  io.emit('level', level);
+  io.emit('level', levelForClients());
   emitEvent('start', {});
 }
 
@@ -197,14 +206,16 @@ function tryGrab(c, h) {
   const hp = h.hand.getPosition();
   // holds first: a hold snaps the fist onto it
   let best = null, bd = CONFIG.grabRadius;
+  const t = now();
   for (const hold of level.holds) {
+    if (hold.brokenUntil > t) continue; // a snapped twig is gone for a while
     const d = Math.hypot(hold.x - hp.x, hold.y - hp.y);
     if (d < bd) { bd = d; best = hold; }
   }
   if (best) {
     const at = Vec2(best.x, best.y);
-    h.hand.setPosition(at); h.hand.setLinearVelocity(Vec2(0, 0));
-    h.joint = world.createJoint(new RevoluteJoint({}, ground, h.hand, at));
+    h.hand.setPosition(at); h.hand.setLinearVelocity(best.body ? best.body.getLinearVelocity() : Vec2(0, 0));
+    h.joint = world.createJoint(new RevoluteJoint({}, best.body || ground, h.hand, at));
     h.grip = { kind: 'hold', id: best.id };
     return gripped(c, h);
   }
@@ -290,21 +301,25 @@ function touchingClimberBelow(c, anchoredOnly = false) {
   }
   return null;
 }
-// what a foot is resting on right now: 'ground' (floor/hold) or null
-function footContact(l) {
-  for (let ce = l.shin.getContactList(); ce; ce = ce.next) {
-    if (!ce.contact.isTouching()) continue;
-    const fa = ce.contact.getFixtureA(), fb = ce.contact.getFixtureB();
-    const mine = fa.getBody() === l.shin ? fa : fb;
-    if (mine.getFilterCategoryBits() === CAT.FOOT && ce.other === ground) return 'ground';
+// is this body resting ON TOP of the world (terrain, a hold, the cart)? Contacts with a wall or a
+// ceiling don't count: brushing the wall isn't footing (or you could hop straight up it).
+function restingOn(body, onlyCategory) {
+  for (let ce = body.getContactList(); ce; ce = ce.next) {
+    const ct = ce.contact;
+    if (!ct.isTouching() || !ct.isEnabled()) continue;
+    if (ce.other !== ground && ce.other.getType() !== 'kinematic') continue;
+    const fa = ct.getFixtureA(), mine = fa.getBody() === body ? fa : ct.getFixtureB();
+    if (onlyCategory && mine.getFilterCategoryBits() !== onlyCategory) continue;
+    const n = ct.getWorldManifold(null).normal; // points from fixture A to fixture B
+    if ((mine === fa ? -n.y : n.y) > 0.5) return true;
   }
-  return null;
+  return false;
 }
+// what a foot is resting on right now: 'ground' (floor / a rock / a hold / the cart) or null
+function footContact(l) { return restingOn(l.shin, CAT.FOOT) ? 'ground' : null; }
 function isStanding(c) {
-  // torso on the floor/walls, a foot resting on the floor/a rock, or standing on a climber
-  for (let ce = c.body.getContactList(); ce; ce = ce.next) {
-    if (ce.contact.isTouching() && ce.other === ground) return true;
-  }
+  // torso sitting on something, a foot resting on something, or standing on a climber
+  if (restingOn(c.body)) return true;
   if (feetOnRock(c)) return true;
   return !!touchingClimberBelow(c);
 }
@@ -547,7 +562,8 @@ function step() {
       c.airPeak = null;
     }
     c.peakY = Math.max(c.peakY, p.y);
-    if (p.y >= level.top && phase === 'playing') { phase = 'results'; winner = c.id; emitEvent('win', { id: c.id }); }
+    c.progress = progressAt(p.x, p.y);
+    if (p.x >= COURSE.finish.zoneX && p.y >= COURSE.finish.y - 0.3 && phase === 'playing') { phase = 'results'; winner = c.id; emitEvent('win', { id: c.id }); }
   }
 
   world.step(DT, 10, 6);
@@ -657,7 +673,7 @@ function results() {
 
 io.on('connection', (socket) => {
   socket.emit('config', { CONFIG, TUNABLE });
-  if (level) socket.emit('level', level);
+  if (level) socket.emit('level', levelForClients());
   socket.emit('roster', roster());
   socket.emit('you', socket.id);
 
