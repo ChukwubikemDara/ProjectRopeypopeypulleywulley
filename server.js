@@ -88,3 +88,84 @@ function resetWorld() {
   for (const c of climbers.values()) { c.body = null; c.hands = []; c.legs = []; }
 }
 
+// ---------------------------------------------------------------- climber bodies
+function spawnClimber(c, index, total) {
+  const x = CONFIG.width * (index + 1) / (total + 1);
+  const standY = CONFIG.hipY + CONFIG.thigh + CONFIG.shin + CONFIG.footRadius + 0.03;
+  c.body = world.createBody({ type: 'dynamic', position: Vec2(x, standY), fixedRotation: true, linearDamping: 0.05 });
+  c.body.createFixture(new Circle(CONFIG.radius), {
+    density: 1, friction: 0.6, restitution: 0.05, filterCategoryBits: CAT.TORSO, filterMaskBits: CAT.WORLD | CAT.TORSO | CAT.FOOT,
+  });
+  c.hands = [-1, 1].map(side => buildArm(c, side));
+  c.legs = [-1, 1].map(side => buildLeg(c, side));
+  const limbMass = (b) => b.getMass();
+  c.mass = c.body.getMass() + c.hands.reduce((m, h) => m + limbMass(h.upper) + limbMass(h.fore) + limbMass(h.hand), 0)
+    + c.legs.reduce((m, l) => m + limbMass(l.thigh) + limbMass(l.shin), 0);
+  c.stamina = 100; c.carry = 0; c.overSince = 0; c.peakY = 0; c.airPeak = null; c.air = false;
+  c.cdPush = 0; c.cdKick = 0; c.pushUntil = 0; c.tuckUntil = 0;
+  c.lastPush = 0; c.lastLetGo = 0; c.lastFoot = 0; c.lastCombo = 0; c.holdingSince = 0; c.savedCounted = false;
+  c.stats = { drops: 0, saves: 0, biggestFall: 0, boosts: 0, combos: 0, kicks: 0, pushes: 0 };
+}
+
+// arms spawn raised (hanging down would poke them through the floor)
+function buildArm(c, side) {
+  const p = c.body.getPosition();
+  const sh = Vec2(p.x + side * CONFIG.shoulderX, p.y + CONFIG.shoulderY);
+  const U = CONFIG.upperArm, F = CONFIG.foreArm;
+  const armFix = { filterCategoryBits: CAT.ARM, filterMaskBits: CAT.WORLD, friction: 0.4 };
+  const upper = world.createBody({ type: 'dynamic', position: Vec2(sh.x, sh.y + U / 2), angularDamping: 2 });
+  upper.createFixture(new Box(0.06, U / 2), { ...armFix, density: 0.6 });
+  const fore = world.createBody({ type: 'dynamic', position: Vec2(sh.x, sh.y + U + F / 2), angularDamping: 2 });
+  fore.createFixture(new Box(0.055, F / 2), { ...armFix, density: 0.6 });
+  const hand = world.createBody({ type: 'dynamic', position: Vec2(sh.x, sh.y + U + F), angularDamping: 2 });
+  hand.createFixture(new Circle(CONFIG.handRadius), { ...armFix, density: 1.5, friction: 1 });
+  world.createJoint(new RevoluteJoint({}, c.body, upper, sh));
+  // elbows can't lock straight (a straight arm acts like a rigid pole and blocks pull-ups); they bend outward
+  world.createJoint(new RevoluteJoint({ enableLimit: true, lowerAngle: side > 0 ? -2.8 : 0.2, upperAngle: side > 0 ? -0.2 : 2.8 }, upper, fore, Vec2(sh.x, sh.y + U)));
+  world.createJoint(new RevoluteJoint({}, fore, hand, Vec2(sh.x, sh.y + U + F)));
+  // grip: null | { kind: 'hold', id } | { kind: 'climber', id }
+  return { side, upper, fore, hand, closed: false, joint: null, grip: null, noGripUntil: 0, since: 0 };
+}
+
+// legs hang straight down at spawn; knees bend outward like a climber's frog stance. Feet are solid
+// (they stand on rocks and push off them) but never grab: only hands hold on.
+function buildLeg(c, side) {
+  const p = c.body.getPosition();
+  const hip = Vec2(p.x + side * CONFIG.hipX, p.y - CONFIG.hipY);
+  const T = CONFIG.thigh, S = CONFIG.shin;
+  const thigh = world.createBody({ type: 'dynamic', position: Vec2(hip.x, hip.y - T / 2), angularDamping: 3 });
+  thigh.createFixture(new Box(0.075, T / 2), { filterCategoryBits: CAT.ARM, filterMaskBits: CAT.WORLD, density: 0.8 });
+  const shin = world.createBody({ type: 'dynamic', position: Vec2(hip.x, hip.y - T - S / 2), angularDamping: 3 });
+  shin.createFixture(new Box(0.065, S / 2), { filterCategoryBits: CAT.ARM, filterMaskBits: CAT.WORLD, density: 0.8 });
+  shin.createFixture(new Circle(Vec2(0, -S / 2), CONFIG.footRadius), {
+    filterCategoryBits: CAT.FOOT, filterMaskBits: CAT.WORLD | CAT.HOLD | CAT.TORSO, density: 0.8, friction: 1.2,
+  });
+  world.createJoint(new RevoluteJoint({ enableLimit: true, lowerAngle: -2.4, upperAngle: 2.4 }, c.body, thigh, hip));
+  world.createJoint(new RevoluteJoint({ enableLimit: true, lowerAngle: side > 0 ? 0.05 : -2.5, upperAngle: side > 0 ? 2.5 : -0.05 }, thigh, shin, Vec2(hip.x, hip.y - T)));
+  return { side, thigh, shin };
+}
+const footPoint = (l) => l.shin.getWorldPoint(Vec2(0, -CONFIG.shin / 2));
+
+function removeClimberBodies(c) {
+  if (!c.body) return;
+  // anyone holding this climber lets go (destroyBody already removes the joints themselves)
+  for (const o of climbers.values()) for (const h of o.hands || []) {
+    if (h.grip && h.grip.kind === 'climber' && h.grip.id === c.id) { h.joint = null; h.grip = null; }
+  }
+  for (const h of c.hands) { world.destroyBody(h.hand); world.destroyBody(h.fore); world.destroyBody(h.upper); }
+  for (const l of c.legs) { world.destroyBody(l.shin); world.destroyBody(l.thigh); }
+  world.destroyBody(c.body);
+  c.body = null; c.hands = []; c.legs = [];
+}
+
+function startRound() {
+  for (const c of climbers.values()) removeClimberBodies(c);
+  resetWorld();
+  const list = [...climbers.values()];
+  list.sort(() => Math.random() - 0.5);
+  list.forEach((c, i) => spawnClimber(c, i, list.length));
+  phase = 'playing'; winner = null; roundStart = now();
+  io.emit('level', level);
+  emitEvent('start', {});
+}
+
