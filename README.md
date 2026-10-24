@@ -23,6 +23,19 @@ ngrok http 3000           # gives you https://xxxx.ngrok-free.app
 Open `https://xxxx.ngrok-free.app/screen.html` on the laptop and have everyone scan the QR.
 Tip: on each iPhone tap Share → **Add to Home Screen** for real full-screen.
 
+### Playing over local Wi-Fi (lowest lag)
+
+```bash
+npm run lan
+```
+
+Fetches a trusted certificate for `<your-ip>.local-ip.sh` (a name that points back at this laptop) and
+prints a link like `https://192-168-1-5.local-ip.sh:3443/screen.html`. Open it on the laptop; phones scan
+the QR code and talk to the laptop directly over Wi-Fi (ping ~5-20 ms instead of ~70+ ms through ngrok),
+with motion access and no certificate setup. Phones must be on the same network. If they can't load
+the page, the Wi-Fi blocks device-to-device traffic (common on campus Wi-Fi): put the laptop and all
+phones on one phone's hotspot instead, and run `npm run lan` again for the new address.
+
 ### Deploying (for the expo)
 
 It's one Node app (pages + websocket server). Render or Railway both work:
