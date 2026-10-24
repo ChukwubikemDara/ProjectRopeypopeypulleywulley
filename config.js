@@ -2,11 +2,7 @@
 // from the spectator screen (press D there) while people playtest.
 
 const CONFIG = {
-  // level
-  width: 12,              // m
-  top: 60,                // summit height (m)
-  holdSpacing: 1.45,      // vertical distance between rows of holds (a pull-up + reach is ~2 m)
-  duoGaps: [[14, 19], [31, 36.5], [48, 54]], // bands with NO holds: need a pull + push combo (both players) or a friend
+  // the race course itself lives in course.js
 
   // climber body
   radius: 0.35,
