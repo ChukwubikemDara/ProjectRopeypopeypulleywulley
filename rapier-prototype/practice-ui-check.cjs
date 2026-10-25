@@ -55,7 +55,7 @@ function uiHarness(){
  safari.inbound('narrate',{id:'stand-up',text:'Go on. Stand up.',audio:'/lab/narration/stand-up.mp3',duration:2});
  console.log('PASS a line blocked by the browser plays as soon as someone clicks, and the caption never stalls');
  // the how-to-play card: your role's moves when the prologue starts, once; not again before a race
- const cp=uiHarness();let tick;cp.ctx.setInterval=f=>{tick=f;return 1;};cp.ctx.clearInterval=()=>{};cp.ctx.sessionStorage={getItem:()=>null,setItem(){}};
+ const cp=uiHarness();let tick;cp.ctx.setInterval=f=>{tick??=f;return 1;};cp.ctx.clearInterval=()=>{}; // keep the watcher, not a card's step timercp.ctx.clearInterval=()=>{};cp.ctx.sessionStorage={getItem:()=>null,setItem(){}};
  cp.inbound('you','p1');cp.inbound('roster',[{id:'c1',members:[{id:'p1',name:'Leo',role:'legs'},{id:'p2',name:'Ana',role:'arms'}]}]);cp.load('controls-preview.js');
  cp.ctx.Net.calibrated=true;cp.inbound('level',{id:'practice',kind:'practice',revision:1,path:[[0,0],[1,1]]});cp.inbound('phase','playing');cp.ctx.Net.phase='playing';tick();
  assert.equal(cp.ctx.ControlsPreview.open,true,'the card opens when the prologue starts');assert.equal(cp.ctx.ControlsPreview.step,'flick','legs start with the flick');
@@ -66,6 +66,13 @@ function uiHarness(){
  cp.ctx.Net.role='both';cp.ctx.ControlsPreview.show();assert.equal(cp.ctx.ControlsPreview.step,'drag');
  cp.ctx.PhoneInput.setTouchMode(false);cp.ctx.Net.role='legs';cp.ctx.ControlsPreview.show();assert.equal(cp.ctx.ControlsPreview.step,'flick','Motion LEGS still learn the flick');
  console.log('PASS controls guide follows input mode and role, including replay from settings');
+ // reaching the beam before the combo wall (here in the right-hand lane) brings up the combo card, your half of the move
+ cp.ctx.PhoneInput.setTouchMode(false);cp.ctx.Net.role='legs';cp.ctx.ControlsPreview.close();
+ cp.inbound('level',{id:'practice',kind:'practice',revision:3,mirror:true,zones:[{id:'beam',x0:-9.5,x1:-5,y0:5.4,y1:9}],path:[[0,0],[1,1]]});cp.ctx.Net.phase='playing';tick();cp.ctx.ControlsPreview.close();
+ cp.inbound('state3d',{revision:3,phase:'playing',climbers:[{id:'c1',x:7,y:6.6,z:0,hands:[],legs:[]}]});tick();
+ assert.equal(cp.ctx.ControlsPreview.kind,'combo','the combo card appears at the beam');assert.equal(cp.ctx.ControlsPreview.step,'comboLegs','legs are told to hop as the arms let go');
+ cp.ctx.ControlsPreview.close();tick();assert.equal(cp.ctx.ControlsPreview.open,false,'and only once');
+ console.log('PASS the combo card appears once when your team reaches the combo wall in the prologue');
  console.log('PASS the how-to-play card shows your role\'s moves once at the start of the prologue');
  console.log('PASS the caption queue ignores repeats, keeps the release line and clears when the round ends');console.log('PASS voice is opt-in on phones, recordings play first, and a missing file falls back to speech');
 })().catch(e=>{console.error(e);process.exitCode=1;});
