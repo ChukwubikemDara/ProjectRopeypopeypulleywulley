@@ -76,6 +76,9 @@ async function createServer({courses=Courses.all}={}){
    s.on('join',m=>{if(players.has(s.id))return;const p={id:s.id,name:String(m?.name||'Climber').slice(0,14),team:null,role:'both',lastInput:Date.now()};players.set(s.id,p);join(p,[...teams.values()].find(t=>!t.bot&&t.members.length===1)||newTeam());publish();});
    s.on('start',m=>{if(!players.has(s.id)&&s.id!==host)return;if(mode==='practice'&&s.id!==host)return;if(m?.practice&&phase==='playing'&&s.id!==host)return;start({practice:!!m?.practice});});
    s.on('practice',()=>{if(s.id===host||phase==='lobby'&&players.has(s.id))start({practice:true});});
+   // back to the start screen from anywhere: any big screen (or the host) can do it, and that screen becomes the host
+   s.on('resetGame',ack=>{const big=s.handshake.auth?.surface==='spectator';if(!big&&s.id!==host){if(typeof ack==='function')ack({ok:false,error:'Only a big screen can reset the game'});return;}
+    if(big)host=s.id;phase='lobby';loadCourse(selected);io.emit('phase',phase);publishSession();if(typeof ack==='function')ack({ok:true});});
    s.on('retryRace',()=>{if(s.id===host)start({retry:true});});
    s.on('selectCourse',(id,ack)=>{let error=null;const target=courses.find(c=>c.id===id&&c.kind==='race');if(s.id!==host)error='Only the host can choose a course';else if(phase==='playing')error='End the round before changing maps';else if(!target)error='That course is not available yet';else{selected=id;phase='lobby';loadCourse(id);io.emit('phase',phase);}if(typeof ack==='function')ack({ok:!error,error});});
    s.on('practiceReset',()=>{const p=players.get(s.id),c=p&&sim.climbers.get(p.team);if(mode!=='practice'||phase!=='playing'||!c||Date.now()-(p.lastPracticeReset||0)<1000)return;p.lastPracticeReset=Date.now();sim.practiceStation(c,sectionStart(c,sim.course));});
