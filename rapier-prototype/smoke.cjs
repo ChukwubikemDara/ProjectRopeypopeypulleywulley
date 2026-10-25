@@ -1,6 +1,6 @@
 const {execFileSync}=require('node:child_process');
 const path=require('node:path');
-for(const name of ['calibration-check.cjs','sensor-check.cjs','phone-input-check.cjs','practice-ui-check.cjs','route-check.cjs','mechanics-check.cjs','kick-check.cjs','prologue-check.cjs','full-course-check.cjs','biome-check.cjs','rotation-check.cjs','integration-check.cjs','course-session-check.cjs'])execFileSync(process.execPath,[path.join(__dirname,name)],{stdio:'inherit'});
+for(const name of ['calibration-check.cjs','sensor-check.cjs','phone-input-check.cjs','practice-ui-check.cjs','route-check.cjs','mechanics-check.cjs','kick-check.cjs','prologue-check.cjs','narration-check.cjs','full-course-check.cjs','biome-check.cjs','rotation-check.cjs','integration-check.cjs','course-session-check.cjs'])execFileSync(process.execPath,[path.join(__dirname,name)],{stdio:'inherit'});
 const assert=require('node:assert/strict');
 const {io}=require('socket.io-client');
 const {createServer}=require('./server.cjs');

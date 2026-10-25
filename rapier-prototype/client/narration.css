@@ -1,0 +1,18 @@
+/* Narrator captions: big subtitles on the big screen, a slim bar on phones. */
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@800;900&display=swap');
+.narration{position:fixed;z-index:20;left:50%;bottom:6vh;transform:translate(-50%,12px);width:min(820px,calc(100vw - 48px));opacity:0;
+ transition:opacity .35s,transform .35s;pointer-events:none;text-align:center}
+.narration[hidden]{display:none}
+.narration.show{opacity:1;transform:translate(-50%,0)}
+.narration-text{display:inline-block;margin:0;padding:12px 22px;border:3px solid #22304a;border-radius:16px;background:#fff9ecf2;color:#22304a;
+ font-family:'Nunito','SF Pro Rounded',system-ui,sans-serif;font-weight:800;font-style:italic;font-size:clamp(17px,2.1vw,28px);line-height:1.35}
+.narration-toggle{position:fixed;z-index:21;right:22px;bottom:22px;padding:8px 14px;border:3px solid #22304a;border-bottom-width:5px;border-radius:14px;
+ background:#fff9ec;color:#22304a;font:900 13px 'Nunito','SF Pro Rounded',system-ui,sans-serif}
+.narration-toggle[aria-pressed=false]{opacity:.75}
+.narration-back{position:fixed;z-index:21;left:16px;top:calc(env(safe-area-inset-top) + 172px);padding:6px 12px;border:3px solid #22304a;border-bottom-width:5px;border-radius:12px;
+ background:#fff9ec;color:#22304a;font:900 12px 'Nunito','SF Pro Rounded',system-ui,sans-serif}
+.narration-back[hidden]{display:none}
+.phone .narration{bottom:auto;top:calc(env(safe-area-inset-top) + 216px);width:calc(100vw - 32px)}
+.phone .narration-text{font-size:14px;padding:8px 12px;border-radius:12px}
+.phone .narration-toggle{position:static;width:100%;margin:6px 0}
+.phone.practice-mode #hint{display:none}

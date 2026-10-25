@@ -1,0 +1,21 @@
+// Narrator rules: one line at a time, places and moments fire once, big moments pick the bigger line.
+const assert=require('node:assert/strict');
+const {Narrator,LINES,duration}=require('./narration.cjs');
+const zones=[{id:'step',x0:7,x1:10,y0:1.2,y1:5},{id:'trench',x0:10,x1:14,y0:-2,y1:-.6}];
+const at=(x,y,progress=0)=>[{x,y,progress,finished:false}];
+const n=new Narrator();n.reset(0);
+assert.equal(n.tick(1,at(1,1)),null,'quiet before the intro');
+const intro=n.tick(2.1,at(1,1));assert.equal(intro.id,'intro');
+assert.equal(n.tick(2.5,at(8,2.4,.2),zones),null,'never talks over itself');
+const step=n.tick(2.1+duration(intro),at(8,2.4,.2),zones);assert.equal(step.id,'step');
+assert.equal(n.tick(30,at(8,2.4,.2),zones),null,'a place line plays once');
+console.log('PASS the narrator queues lines, never overlaps, and says each place once');
+n.observe({type:'fall',m:6},31);assert.equal(n.tick(31,at(8,2.4,.2)).id,'big-fall','a big fall gets the big-fall line');
+n.observe({type:'fall',m:2.5},60);assert.equal(n.tick(60,at(8,2.4,.2)).id,'first-fall');
+console.log('PASS falls pick the line that fits their size');
+const late=new Narrator();late.reset(0);late.played.add('intro');late.busyUntil=20;late.tick(5,at(12,-1.5),zones);
+assert.equal(late.tick(20,at(12,-1.5),zones),null,'a place line that waited too long is dropped');
+const stall=new Narrator();stall.reset(0);stall.played.add('intro');let line=null;for(let t=1;t<40&&!line;t++)line=stall.tick(t,at(5,1,.3));
+assert.equal(line?.id,'stall-1');console.log('PASS stale place lines are dropped, and a long stall gets a nudge');
+assert.ok(LINES.every(l=>l.id&&l.text&&l.at),'every line has an id, text and trigger');assert.equal(new Set(LINES.map(l=>l.id)).size,LINES.length,'line ids are unique (they name the recordings)');
+console.log('PASS the script is well formed');

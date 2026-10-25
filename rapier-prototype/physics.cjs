@@ -316,7 +316,7 @@ class Simulation {
   practiceStation(c,stage){
     if(this.course.kind!=='practice')return false;
     const point=typeof stage==='object'&&stage?stage:this.course.stations[stage]||Object.values(this.course.stations)[0];
-    delete c.tutorialTakeoff;const closed=[c.arms.l,c.arms.r];c.safeSpawn=V(point.x,point.y,0);this.recover(c);for(const h of c.hands)h.noGripUntil=0;[c.arms.l,c.arms.r]=closed;c.lastJump=c.lastPush=c.lastLetGo=-10;c.stamina=100;
+    const closed=[c.arms.l,c.arms.r];c.safeSpawn=V(point.x,point.y,0);this.recover(c);for(const h of c.hands)h.noGripUntil=0;[c.arms.l,c.arms.r]=closed;c.lastJump=c.lastPush=c.lastLetGo=-10;c.stamina=100;
     // Closed pads still have to catch real holds; the station never awards a grip or combo.
     return true;
   }

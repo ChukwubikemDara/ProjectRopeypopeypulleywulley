@@ -1,14 +1,16 @@
 const express=require('express'),http=require('http'),https=require('https'),fs=require('fs'),path=require('path'),os=require('os');
 const {Server}=require('socket.io');
 const QR=require('qrcode');
-const {Simulation}=require('./physics.cjs');
+const {Simulation,progressAt}=require('./physics.cjs');
 const Courses=require('./courses.cjs');
-const {Tutorial}=require('./tutorial.cjs');
+const {Narrator,duration}=require('./narration.cjs');
 // Reset in the prologue puts a team back at the start of the section they're in (the trench counts as the step before it).
 const sectionStart=(c,course)=>{const x=c.body.translation().x,stations=Object.values(course.stations||{}).sort((a,b)=>a.x-b.x);return stations.filter(s=>s.x<=x+.5).at(-1)||stations[0];};
+// A recording in client/narration/<id>.<ext> replaces the synthesized voice for that line.
+function narrationAudio(id){for(const ext of ['mp3','m4a','wav','ogg'])if(fs.existsSync(path.join(__dirname,'client','narration',`${id}.${ext}`)))return`/lab/narration/${id}.${ext}`;return null;}
 const {TUNABLE}=require('./main-config.cjs');
 async function createServer({courses=Courses.all}={}){
- let sim=await Simulation.create(courses.find(c=>c.kind==='race'));const tutorial=new Tutorial();let revision=1,selected=sim.course.id,host=null,mode='race';
+ let sim=await Simulation.create(courses.find(c=>c.kind==='race'));const narrator=new Narrator();let revision=1,selected=sim.course.id,host=null,mode='race';
  const app=express(),server=http.createServer(app),io=new Server(server);
  const teams=new Map(),players=new Map();let phase='lobby',started=0,serial=0,winner=null;
  const colors=['#42b9ab','#ef8b79','#83b7d6','#dcb56b','#b09bd7','#e5a9c0','#b0c887','#dfaa76'];
@@ -20,10 +22,10 @@ async function createServer({courses=Courses.all}={}){
  app.get(['/screen','/screen.html'],(_,res)=>res.sendFile(path.join(__dirname,'client/screen.html')));
  app.get(['/phone','/index.html'],(_,res)=>{
    let html=fs.readFileSync(path.join(pub,'index.html'),'utf8');
-   html=html.replace('/js/net.js','/lab/net.js').replace('/js/render3d.js','/lab/render.js').replace('/js/phone.js','/lab/phone.js').replace('<script src="/js/presentation.js"></script>','<script src="/lab/sensor-status.js"></script><script src="/lab/phone-controls.js"></script><script src="/lab/phone-lab.js"></script><script src="/lab/tutorial.js"></script>');
+   html=html.replace('/js/net.js','/lab/net.js').replace('/js/render3d.js','/lab/render.js').replace('/js/phone.js','/lab/phone.js').replace('<script src="/js/presentation.js"></script>','<script src="/lab/sensor-status.js"></script><script src="/lab/phone-controls.js"></script><script src="/lab/phone-lab.js"></script><script src="/lab/narration.js"></script>');
    html=html.replace('SNOWBOUND · PARTY CLIMBING','SNOWBOUND · THE LONG WAY UP');
    html=html.replace('<div id="comboFlash">COMBO!</div>','<div id="comboFlash">COMBO!</div><div id="hopFlash">HOP</div><div id="lagbox"></div>');
-   html=html.replace('</head>','<link rel="stylesheet" href="/lab/lab.css"><link rel="stylesheet" href="/lab/controls.css"><link rel="stylesheet" href="/lab/tutorial.css"><link rel="stylesheet" href="/lab/game-hud.css"></head>');
+   html=html.replace('</head>','<link rel="stylesheet" href="/lab/lab.css"><link rel="stylesheet" href="/lab/controls.css"><link rel="stylesheet" href="/lab/tutorial.css"><link rel="stylesheet" href="/lab/game-hud.css"><link rel="stylesheet" href="/lab/narration.css"></head>');
    res.send(html);
  });
  app.get('/qr.svg',async(req,res)=>{try{res.type('svg').send(await QR.toString(String(req.query.url||'').slice(0,400),{type:'svg',margin:1}));}catch{res.sendStatus(400);}});
@@ -46,7 +48,7 @@ async function createServer({courses=Courses.all}={}){
  function loadCourse(id){
   const definition=courses.find(c=>c.id===id);if(!definition)return false;
   const config={...sim.config};sim.free();sim=new Simulation(definition);for(const [key,value]of Object.entries(config))sim.tune(key,value);
-  mode=definition.kind==='practice'?'practice':'race';tutorial.reset();revision++;winner=null;started=sim.time;spawnTeams();
+  mode=definition.kind==='practice'?'practice':'race';narrator.reset(sim.time);revision++;winner=null;started=sim.time;spawnTeams();
   io.emit('level',level());publish();publishSession();return true;
  }
  function start(options={}){
@@ -77,14 +79,14 @@ async function createServer({courses=Courses.all}={}){
      const p=players.get(s.id),c=p&&sim.climbers.get(p.team);if(!c||!m)return;p.lastInput=Date.now();
      if(p.role!=='legs'){Object.assign(c.arms,{aim:number(m.aim),ay:number(m.ay,.6),brace:m.brace!==false});sim.setHand(c,0,!!m.l);sim.setHand(c,1,!!m.r);}
      if(p.role!=='arms')Object.assign(c.legs,{aim:number(m.aim),ay:number(m.ay,.6),brace:m.brace!==false});
-     if(mode==='practice')tutorial.input(c.id,p.role,{aim:number(m.aim),ay:number(m.ay,.6)});
+     
    });
    s.on('motion-report',m=>{
      const p=players.get(s.id);if(!p||!m)return;
      p.motion={secure:!!m.secure,enabled:!!m.enabled,ready:!!m.ready,orientation:Math.max(0,Number(m.orientation)||0),acceleration:Math.max(0,Number(m.acceleration)||0),aim:number(m.aim),ay:number(m.ay),energy:Math.max(0,Number(m.energy)||0),lastGesture:['none','flick','yank','kick'].includes(m.lastGesture)?m.lastGesture:'none',at:Date.now()};
      io.emit('motion-status',{id:p.id,name:p.name,role:p.role,...p.motion});
    });
-   s.on('gesture',(g,power,ack)=>{const p=players.get(s.id),c=p&&sim.climbers.get(p.team);const result=phase==='playing'&&c&&p.role!=='arms'?sim.gesture(c,g,typeof power==='number'?power:1):false;if(mode==='practice'&&c&&p.role!=='arms')tutorial.gesture(c,g,result,sim.time);if(typeof ack==='function')ack({ok:!!result,result:!p?'not joined':phase!=='playing'?'not playing':p.role==='arms'?'arms cannot use leg actions':c?.lastGestureResult||'not playing'});});
+   s.on('gesture',(g,power,ack)=>{const p=players.get(s.id),c=p&&sim.climbers.get(p.team);const result=phase==='playing'&&c&&p.role!=='arms'?sim.gesture(c,g,typeof power==='number'?power:1):false;if(typeof ack==='function')ack({ok:!!result,result:!p?'not joined':phase!=='playing'?'not playing':p.role==='arms'?'arms cannot use leg actions':c?.lastGestureResult||'not playing'});});
    // Checkpoint injection is for the command-line simulation only, never player controls.
    s.on('lab',m=>{if(process.env.LAB_DEBUG!=='1'||m?.action!=='checkpoint')return;const p=players.get(s.id),c=p&&sim.climbers.get(p.team);if(c)sim.checkpoint(c);});
    s.on('swapRole',()=>{const p=players.get(s.id),t=p&&teams.get(p.team);if(t?.members.length===2){t.members.reverse();roles(t);publish();}});
@@ -99,8 +101,9 @@ async function createServer({courses=Courses.all}={}){
    const now=performance.now();accumulator+=Math.min(.08,(now-last)/1000);last=now;
    for(const p of players.values())if(Date.now()-p.lastInput>1200){const c=sim.climbers.get(p.team);if(c){if(p.role!=='legs')Object.assign(c.arms,{l:false,r:false,aim:0});if(p.role!=='arms'){c.legs={aim:0,ay:.6};}}}
    while(accumulator>=1/90){if(phase==='playing')sim.step();accumulator-=1/90;ticks++;}
-   for(const ev of sim.events.splice(0)){if(mode==='practice')tutorial.event(ev);io.emit('event',ev);}
-   if(ticks>=Math.max(1,Math.round(90/sim.config.sendRate))){ticks=0;const climbers=[...sim.climbers.values()].map(c=>({...sim.snapshot(c),...(mode==='practice'?{tutorial:tutorial.snapshot(c,sim.time)}:{})}));
+   for(const ev of sim.events.splice(0)){if(mode==='practice')narrator.observe(ev,sim.time);io.emit('event',ev);}
+   if(mode==='practice'&&phase==='playing'){const line=narrator.tick(sim.time,[...sim.climbers.values()].filter(c=>!c.bot).map(c=>{const p=c.body.translation(),f=sim.course.finish;return{x:p.x,y:p.y,progress:progressAt(p.x,p.y,sim.course),finished:p.x>=f.zoneX&&p.y>=f.y-.3};}),sim.course.zones);if(line)io.emit('narrate',{id:line.id,text:line.text,audio:narrationAudio(line.id),duration:duration(line)});}
+   if(ticks>=Math.max(1,Math.round(90/sim.config.sendRate))){ticks=0;const climbers=[...sim.climbers.values()].map(c=>sim.snapshot(c));
      if(phase==='playing'&&mode==='race'&&!winner){const win=climbers.find(c=>c.finished);if(win){winner=win.id;phase='results';io.emit('phase',phase);io.emit('event',{type:'win',id:winner});io.emit('results',sim.results(winner));}}
      io.emit('state3d',{t:Date.now(),revision,courseId:sim.course.id,mode,climbers,...sim.dynamicState(),phase,winner,elapsed:Math.max(0,sim.time-started),assist:true});
    }

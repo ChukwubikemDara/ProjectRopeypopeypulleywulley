@@ -12,10 +12,16 @@ function uiHarness(){
  const h=uiHarness();h.load('phone-lab.js');h.inbound('you','p1');await h.node('joinBtn').handlers.click[0]();h.inbound('roster',[{id:'c1',members:[{id:'p1',name:'Test',role:'both'}]}]);
  h.created.find(n=>n.textContent==='Calibrate & practice together').onclick();assert.equal(h.ctx.Net.calibrated,false);assert.equal(h.emitted.filter(e=>e.type==='start').length,0);
  h.created.find(n=>n.textContent==='Continue with touch controls').onclick();assert.equal(h.touch,true);assert.equal(h.ctx.Net.calibrated,true);assert.equal(h.emitted.filter(e=>e.type==='start').at(-1).args[0].practice,true);console.log('PASS sensor-free fallback preserves a pending practice request');
- const quiet=uiHarness();quiet.load('tutorial.js');const unavailable=quiet.created.find(n=>n.textContent==='Captions only');assert.ok(unavailable?.disabled);console.log('PASS missing speech support leaves captions usable');
- const voice=uiHarness();let render;const spoken=[];let canceled=0;voice.ctx.setInterval=f=>{render=f;};voice.ctx.speechSynthesis={speak:u=>spoken.push(u.text),cancel:()=>canceled++};voice.ctx.SpeechSynthesisUtterance=class{constructor(text){this.text=text;}};voice.load('tutorial.js');
- voice.inbound('you','p1');voice.inbound('roster',[{id:'c1',members:[{id:'p1',role:'both'}]}]);voice.inbound('level',{id:'practice',kind:'practice',path:[[0,0],[1,1]]});voice.ctx.Net.calibrated=true;
- voice.inbound('state3d',{phase:'playing',climbers:[{id:'c1',hands:[],legs:[],tutorial:{step:'aim',done:[],total:5,lesson:{title:'Aim',both:'Move your hands'},line:'Two brains. One climber.'}}]});render();assert.equal(spoken.length,0);
- const audio=voice.created.find(n=>n.textContent==='Enable voice');audio.onclick();assert.equal(spoken.length,1);render();assert.equal(spoken.length,1);audio.onclick();assert.ok(canceled>0);assert.equal(audio.textContent,'Enable voice');
- voice.created.find(n=>n.textContent==='Skip tips').onclick();assert.equal(voice.created.find(n=>n.id==='practiceCard').hidden,true);assert.equal(voice.ctx.Net.phase,'playing');console.log('PASS voice is opt-in, repeats are suppressed, mute cancels, and skipping does not stop practice');
+
+ // narration: captions always; voice off by default on phones; recordings first, synthesized voice as fallback
+ const quiet=uiHarness();quiet.load('narration.js');quiet.inbound('narrate',{id:'intro',text:'Two of you. One body.',audio:null,duration:3});
+ const caption=quiet.created.find(n=>n.className==='narration-text');assert.equal(caption.textContent,'Two of you. One body.');console.log('PASS captions show without any speech support');
+ const setup=saved=>{const h=uiHarness();h.spoken=[];h.played=[];h.canceled=0;h.ctx.speechSynthesis={speak:u=>h.spoken.push(u.text),cancel:()=>h.canceled++};h.ctx.SpeechSynthesisUtterance=class{constructor(text){this.text=text;}};
+  h.ctx.Audio=class{constructor(src){h.played.push(src);}play(){return Promise.reject(new Error('missing file'));}pause(){}};h.ctx.localStorage={getItem:()=>saved,setItem(){}};h.load('narration.js');h.toggle=h.created.find(n=>n.className==='narration-toggle');return h;};
+ const quietPhone=setup(null);quietPhone.inbound('narrate',{id:'step',text:'Up one whole step.',audio:null,duration:2});
+ assert.equal(quietPhone.spoken.length,0,'phones stay quiet unless voice is switched on');assert.equal(quietPhone.toggle.textContent,'Narrator voice: off');
+ quietPhone.toggle.onclick();assert.equal(quietPhone.toggle.textContent,'Narrator voice: on');
+ const voice=setup('true');voice.inbound('narrate',{id:'wall',text:'Too tall to hop.',audio:'/lab/narration/wall.mp3',duration:2});await new Promise(r=>setTimeout(r,10));
+ assert.deepEqual(voice.played,['/lab/narration/wall.mp3'],'the recording is tried first');assert.deepEqual(voice.spoken,['Too tall to hop.'],'a missing recording falls back to the synthesized voice');
+ voice.toggle.onclick();assert.ok(voice.canceled>0,'muting stops the voice');console.log('PASS voice is opt-in on phones, recordings play first, and a missing file falls back to speech');
 })().catch(e=>{console.error(e);process.exitCode=1;});
