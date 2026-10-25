@@ -158,12 +158,21 @@ class Simulation {
     c.pushUntil=this.time+.22;c.pushDir=this.pushDirection(c);c.pushSpeed=this.config.legPushSpeed+this.config.comboBonus;c.lastGestureResult='combo';
     this.events.push({type:'combo',id:c.id});return true;
   }
+  jumpState(c,grounded=this.grounded(c)){
+    const cooldown=Math.max(0,.4-(this.time-c.lastJump));
+    const justReleased=!c.hands.some(h=>h.grip)&&this.time-c.lastLetGo<this.config.comboWindow;
+    const footing=grounded||this.time-c.lastFoot<.25||this.courseGrips(c)>0||!!this.below(c,true)||justReleased;
+    const comboAvailable=this.time-c.lastCombo>=this.config.comboCooldown&&c.stamina>=this.config.comboCost;
+    const hanging=this.courseGrips(c)>0&&!grounded;
+    return {ready:cooldown===0&&footing,cooldown,reason:cooldown>0?'cooldown':footing?'ready':'no footing',hanging,
+      combo:comboAvailable&&(hanging||justReleased&&c.letGoHanging),
+      releaseNow:comboAvailable&&hanging&&c.pushHanging&&this.time-c.lastPush<this.config.comboWindow,
+      hopNow:comboAvailable&&justReleased&&c.letGoHanging};
+  }
   gesture(c,g,power=1){
     if(g==='flick'||g==='push'){
-      if(this.time-c.lastJump<.4){c.lastGestureResult='cooldown';return false;}
-      const justReleased=!c.hands.some(h=>h.grip)&&this.time-c.lastLetGo<this.config.comboWindow;
-      const footing=this.grounded(c)||this.time-c.lastFoot<.25||this.courseGrips(c)>0||!!this.below(c,true)||justReleased;
-      if(!footing){c.lastGestureResult='no footing';return false;}
+      const jump=this.jumpState(c),justReleased=!c.hands.some(h=>h.grip)&&this.time-c.lastLetGo<this.config.comboWindow;
+      if(!jump.ready){c.lastGestureResult=jump.reason;return false;}
       c.lastJump=this.time;c.lastPush=this.time;c.pushHanging=this.courseGrips(c)>0&&!this.grounded(c);c.stats.pushes++;
       if(justReleased&&c.letGoHanging&&this.launch(c))return true;
       c.pushUntil=this.time+.16;c.pushDir=this.pushDirection(c);c.pushSpeed=this.config.legPushSpeed*clamp(Number.isFinite(power)?power:1,.6,1.15)*(1+(Math.random()*2-1)*this.config.flickJank);const booster=c.hands.some(h=>h.grip)?null:this.below(c,true);if(booster){c.pushSpeed*=this.config.boostMult;c.stats.boosts++;booster.body.applyImpulse(V(0,-c.pushSpeed*.15*booster.body.mass(),0),true);this.events.push({type:'boost',id:c.id,by:booster.id});}c.lastGestureResult='pushed';
@@ -312,7 +321,7 @@ class Simulation {
     });
     const ground=this.grounded(c);
     const legs=c.feet.map(f=>{const foot=f.body.translation(),hip=add(p,rotate(V(f.side*this.config.hipX,-this.config.hipY,0),q));const knee=add(mul(add(hip,foot),.5),V(f.side*.05,.02,.14));return{kx:knee.x,ky:knee.y,kz:knee.z,fx:foot.x,fy:foot.y,fz:foot.z,planted:!!this.footSupport(f)};});
-    return {id:c.id,...p,assist:c.assist,grounded:ground,rotation:q,velocity:vel,angular:c.body.angvel(),stamina:c.stamina,carry:c.carry,stats:{...c.stats},lastAction:c.lastGestureResult,braced:c.braced,air:!ground&&!hands.some(h=>h.grip),hands,legs,gripping:hands.some(h=>h.grip),progress:progressAt(p.x,p.y),finished:p.x>=course.finish.zoneX&&p.y>=course.finish.y-.3};
+    return {id:c.id,...p,assist:c.assist,grounded:ground,rotation:q,velocity:vel,angular:c.body.angvel(),stamina:c.stamina,actions:{jump:this.jumpState(c,ground),kick:{cooldown:Math.max(0,this.config.kickCooldown-(this.time-(c.lastKick??-10)))}},carry:c.carry,stats:{...c.stats},lastAction:c.lastGestureResult,braced:c.braced,air:!ground&&!hands.some(h=>h.grip),hands,legs,gripping:hands.some(h=>h.grip),progress:progressAt(p.x,p.y),finished:p.x>=course.finish.zoneX&&p.y>=course.finish.y-.3};
   }
   free(){for(const id of [...this.climbers.keys()])this.remove(id);this.contactEvents.free();this.world.free();}
 }

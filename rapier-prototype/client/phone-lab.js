@@ -10,10 +10,10 @@
  const heading=document.createElement('b');heading.textContent='Phone motion check';
  const sensorText=document.createElement('p');sensorText.className='sensor-status';sensorText.setAttribute('role','status');
  const enable=document.createElement('button');enable.className='ghost';enable.textContent='Enable motion';
- enable.onclick=async()=>{skipSensors=false;const ok=await Motion.enable();permissionError=ok?'':'Safari has not granted motion access. Check this site’s permission, then retry.';sensorText.textContent=ok?'Permission accepted. Tilt the phone gently to check delivery.':'Permission was not granted. Check Safari motion permission, then try again.';};
- const skip=document.createElement('button');skip.className='ghost';skip.textContent='Continue with touch / keyboard';
+ enable.onclick=async()=>{skipSensors=false;const ok=await Motion.enable();if(ok)PhoneControls.setTouchMode(false);permissionError=ok?'':'Safari has not granted motion access. Check this site’s permission, then retry.';sensorText.textContent=ok?'Permission accepted. Tilt the phone gently to check delivery.':'Permission was not granted. Check Safari motion permission, then try again.';};
+ const skip=document.createElement('button');skip.className='ghost';skip.textContent='Continue with touch controls';
  let skipSensors=false,permissionError='';
- skip.onclick=()=>{skipSensors=true;document.getElementById('startBtn').click();};
+ skip.onclick=()=>{skipSensors=true;PhoneControls.setTouchMode(true);document.getElementById('startBtn').click();};
  sensorCard.append(heading,sensorText,enable,skip);document.getElementById('lobby').insertBefore(sensorCard,document.getElementById('startBtn'));
  const recalibrate=document.createElement('button');recalibrate.className='ghost';recalibrate.textContent='Recalibrate motion';recalibrate.onclick=()=>{
   document.getElementById('debug').classList.add('hidden');
@@ -52,15 +52,15 @@
   document.getElementById('startBtn').textContent=Net.phase==='playing'?'Calibrate & join round':'Calibrate & start race';
   if(Net.me)emit('motion-report',r);
  },500);
- Net.on('results',awards=>{const win=awards.find(a=>a.val==='summit');if(win)document.getElementById('winnerName').textContent=Net.nameOf(win.id)+' finished the course slice';});
+ Net.on('results',awards=>{const win=awards.find(a=>a.val==='summit');if(win)document.getElementById('winnerName').textContent=Net.nameOf(win.id)+' finished the race';});
  Net.on('you',()=>queueMicrotask(()=>{
   const legs=Net.role==='legs';
-  document.getElementById('roleHow').textContent=legs?'Lean to swing your feet. Hop to jump from footing. While hanging, hop as your arms teammate releases for a combo. Squat to tuck; shove to kick nearby rivals.':Net.role==='arms'?'Tilt to position your hands. Hold each pad to grab a nearby hold; release to let go. Your legs teammate hops to jump. While hanging, release together with their hop for a combo.':'Tilt aims your hands; hold the pads to grip. Hop to jump from footing. Hanging? Hop and release the pads together for a combo. Travel stays centered.';
+  document.getElementById('roleHow').textContent=legs?'Lean to swing your feet. Hop to jump from footing. While hanging, hop as your arms teammate releases for a combo. Squat to tuck; shove or tap Kick to nudge nearby rivals. Jump and tuck buttons are available in settings.':Net.role==='arms'?'Tilt to position your hands. Hold each pad to grab a nearby hold; release to let go. Your legs teammate hops to jump. While hanging, release together with their hop for a combo.':'Tilt aims your hands; hold the pads to grip. Hop to jump from footing. Hanging? Hop and release the pads together for a combo. Travel stays centered.';
   document.getElementById('hint').textContent=legs?'Lean swings feet · hop jumps · hop + arms release = combo':'Tilt positions hands · hold pads to grip · legs hop to jump';
  }));
  function tick(){requestAnimationFrame(tick);const s=Net.sample(),c=s?.climbers.find(c=>c.id===Net.me);document.body.classList.toggle('lab-playing',Net.calibrated&&s?.phase==='playing'&&!!c);
  if(performance.now()>feedbackUntil)feedback.hidden=true;
- if(c){const push=document.getElementById('pushText');if(push&&!push.parentElement.classList.contains('fire'))push.textContent=c.grounded?'FEET DOWN · HOP':c.gripping?'HOP + RELEASE':'FIND FOOTING';dot.style.bottom=`${c.progress*100}%`;dot.style.setProperty('--team',Net.colorOf(c.id));document.getElementById('height').textContent=Math.round(c.progress*100);document.querySelector('.height small').textContent='%';document.getElementById('hudName').textContent=Net.nameOf(c.id);document.getElementById('hudRole').textContent=(Net.role==='both'?'ARMS + LEGS':(Net.role||'climber').toUpperCase());}
+ if(c){dot.style.bottom=`${c.progress*100}%`;dot.style.setProperty('--team',Net.colorOf(c.id));document.getElementById('height').textContent=Math.round(c.progress*100);document.querySelector('.height small').textContent='%';document.getElementById('hudName').textContent=Net.nameOf(c.id);document.getElementById('hudRole').textContent=(Net.role==='both'?'ARMS + LEGS':(Net.role||'climber').toUpperCase());}
  }
  tick();
  Net.on('phase',p=>{if(p==='lobby'&&Net.me){document.getElementById('hud').classList.add('hidden');document.getElementById('results').classList.add('hidden');document.getElementById('lobby').classList.remove('hidden');}});

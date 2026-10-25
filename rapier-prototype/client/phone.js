@@ -4,6 +4,16 @@
   const show = (id, on) => $(id).classList.toggle('hidden', !on);
   const socket = Net.socket;
   let joined = false, wakeLock = null;
+  let touchMode = false, touchAim = { aim: 0, ay: 0.6 }, lastActionAt = -Infinity;
+  const inputNow = () => touchMode ? { ...touchAim, brace: true } : Motion;
+  window.PhoneInput = {
+    gesture: (g) => triggerGesture(g, 1, 'button'),
+    setTouchMode(on) { touchMode = !!on; touchAim = { aim: 0, ay: 0.6 }; sendInput(true); },
+    setAim(aim, ay) { touchAim = { aim: Math.max(-1, Math.min(1, aim)), ay: Math.max(-1, Math.min(1, ay)) }; sendInput(); },
+    get touchMode() { return touchMode; },
+    get aim() { return inputNow(); },
+    get lockout() { return Math.max(0, Motion.LOCKOUT - (performance.now() - lastActionAt)); },
+  };
 
   try { $('name').value = localStorage.getItem('tethered-name') || ''; } catch (e) {}
   const standalone = window.navigator.standalone || matchMedia('(display-mode: standalone)').matches;
@@ -105,8 +115,14 @@
   });
 
   // ---------- inputs
-  Motion.onGesture = (g, power) => {
-    if (Net.role === 'arms') return; // the arms only tilt and grip
+  function triggerGesture(g, power = 1, source = 'motion') {
+    if (!['flick', 'yank', 'kick'].includes(g) || !joined || !Net.calibrated || Net.phase !== 'playing' || !Net.me || Net.role === 'arms') return false;
+    if (!$('debug').classList.contains('hidden') || $('hud').classList.contains('hidden')) return false;
+    const now = performance.now();
+    if (now - lastActionAt < Motion.LOCKOUT || touchMode && source === 'motion') return false;
+    lastActionAt = now;
+    // A tap can jostle a phone: share the sensor lockout so it cannot fire twice.
+    Motion._lock = Math.max(Motion._lock || 0, now + Motion.LOCKOUT);
     flashGesture(g);
     if (g === 'flick') { $('hopFlash').classList.remove('show'); void $('hopFlash').offsetWidth; $('hopFlash').classList.add('show'); }
     const t0 = performance.now();
@@ -114,7 +130,9 @@
       lag.hop = err ? 2000 : Math.round(performance.now() - t0);
       lag.result = err ? 'lost' : (result?.result || result);
     });
-  };
+    return true;
+  }
+  Motion.onGesture = (g, power) => triggerGesture(g, power, Motion._keys[{flick:'w',yank:'s',kick:'k'}[g]] ? 'keyboard' : 'motion');
   // hands: hold a pad (or Q / E on a laptop) to close that hand. Each pad tracks its own
   // touches so both thumbs work at once.
   const pads = { l: false, r: false };
@@ -123,7 +141,8 @@
   function sendInput(force) {
     if (!joined) return;
     const h = handsNow();
-    const msg = { aim: +Motion.aim.toFixed(2), ay: +Motion.ay.toFixed(2), brace: Motion.brace, l: h.l, r: h.r };
+    const input = inputNow();
+    const msg = { aim: +input.aim.toFixed(2), ay: +input.ay.toFixed(2), brace: input.brace, l: h.l, r: h.r };
     // grabbing / letting go must arrive: send it reliably, right away
     if (h.l !== sentHands.l || h.r !== sentHands.r || force) {
       sentHands = { ...h, aim: msg.aim, ay: msg.ay };
@@ -146,6 +165,13 @@
     el.addEventListener('mousedown', set(true));
     ['touchend', 'touchcancel', 'mouseup', 'mouseleave'].forEach(ev => el.addEventListener(ev, set(false), { passive: false }));
   }
+  function releaseInput() {
+    pads.l = pads.r = false; Motion._keys = {}; touchAim = { aim: 0, ay: 0.6 }; sendInput(true);
+  }
+  addEventListener('blur', releaseInput);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') releaseInput(); });
+  Net.on('disconnect', releaseInput);
+  Net.on('phase', p => { if (p !== 'playing') releaseInput(); });
   addEventListener('keydown', () => sendInput());
   addEventListener('keyup', () => sendInput());
   setInterval(() => sendInput(true), 250);          // reliable heartbeat (brace, etc.)
@@ -180,13 +206,14 @@
     requestAnimationFrame(frame);
     const R3 = window.Render3D;
     $('lagbox').textContent = `ping ${lag.ping} · hop ${lag.hop}${lag.result && lag.result !== 'pushed' ? ' (' + lag.result + ')' : ''} · snap ${Math.round(Net.snapAge)}ms · ${R3 ? R3.fps : '?'}fps`;
+    const input = inputNow();
     // lobby pointer check: arms see the 2D hand target, legs see left/right lean
-    $('aimDot').style.left = (50 + Motion.aim * 45) + '%';
-    $('aimDot').style.top = (Net.role === 'legs' ? 50 : 50 - Motion.ay * 42) + '%';
-    $('aimText').textContent = Net.role === 'legs' ? 'lean' : (Motion.ay < -0.2 ? 'hands ↓' : Motion.ay > 0.8 ? 'reach ↑' : 'hands');
+    $('aimDot').style.left = (50 + input.aim * 45) + '%';
+    $('aimDot').style.top = (Net.role === 'legs' ? 50 : 50 - input.ay * 42) + '%';
+    $('aimText').textContent = Net.role === 'legs' ? 'lean' : (input.ay < -0.2 ? 'hands ↓' : input.ay > 0.8 ? 'reach ↑' : 'hands');
     for (const id of ['steady', 'hudSteady']) {
-      $(id).textContent = Motion.brace ? 'STEADY' : 'SHAKY';
-      $(id).classList.toggle('bad', !Motion.brace);
+      $(id).textContent = input.brace ? 'STEADY' : 'SHAKY';
+      $(id).classList.toggle('bad', !input.brace);
     }
     if (performance.now() - lastGesture > 900) $('gestureTest').textContent = Net.role === 'arms' ? 'tilt to move the dot' : 'hop · squat · shove';
 
@@ -195,6 +222,7 @@
     if (me && Net.level) {
       $('height').textContent = Math.round(Net.progress(me.x, me.y) * 100); // % of the course
       $('stamina').style.width = me.stamina + '%';
+      $('stamina').parentElement.setAttribute('aria-valuenow', Math.round(me.stamina));
       $('stamina').classList.toggle('low', me.stamina < 30);
     }
     const h = handsNow();

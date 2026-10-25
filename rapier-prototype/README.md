@@ -20,6 +20,14 @@ npm run start:3d
 
 Physical iPhone motion needs trusted HTTPS. With the ignored local `certs/` directory present, this server also serves HTTPS on port 3450, and the spectator QR uses it automatically. On the current network: https://10-0-0-81.local-ip.sh:3450/phone. The user previously confirmed iPhone Safari motion over HTTPS. Calibration still requires explicit completion and reports actual tilt/acceleration delivery.
 
+## Phone controls update (milestone 1)
+
+Motion remains primary. LEGS and solo players always have a Kick button. Settings → Button controls optionally adds Jump and Tuck. ARMS never see or send leg actions. Buttons and motion share the existing gesture path, server role checks, cooldowns and a short client lockout, preventing a tap/jostle double trigger.
+
+Choosing “Continue with touch controls” enables sensor-free aiming plus all action buttons. Drag the aim pad (or focus it and use arrows); Center resets it. Aim stays where released so a player can aim, then close a hand pad. Settings can switch back to motion; Enable motion also does so. Touch mode suppresses sensor gestures while retaining the button path.
+
+The status card reports actual server jump readiness, combo timing cues, and missing footing; pads distinguish OPEN / IN REACH / SEARCHING / GRIPPED / CLIMBER, and feet show Planted / Free. The server uses the same jump eligibility calculation for both gameplay and HUD snapshots. Backgrounding the page releases pads and centers touch aim. New controls are browser-tested; current physical iPhone motion still needs a user refresh/feel check after this change.
+
 ## Full course and rules
 
 The source course and config are copied from main `8f94284` into `course-source.cjs` and `main-config.cjs`. Terrain, obstacle height, original hold positions, moving cart, signs, racing line, and finish zone are preserved.
