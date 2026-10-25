@@ -59,7 +59,7 @@ const practice=prepareCourse({id:'practice',biome:'snow',kind:'practice',name:'P
  stations:{wake:{x:-33,y:1.05},ledge:{x:-17,y:4.05},landing:{x:-9.8,y:6.65},platform:{x:-2.5,y:10.85}},
  // where each place line triggers, and `still`: where someone has to be for it to still make sense when its turn comes
  zones:[
-  {id:'walk',x0:-28,x1:-24,y0:-1,y1:4,still:{x0:-36,x1:-21,y0:-1,y1:3.2}},
+  {id:'walk',x0:-28,x1:-24,y0:-1,y1:4,still:{x0:-36,x1:-4,y0:-1,y1:9}}, // 'trust' is a general musing: it still fits anywhere on the lane
   {id:'ledge',x0:-23.5,x1:-21,y0:-1,y1:2.6,still:{x0:-25,x1:-20.6,y0:-1,y1:4.4}},
   {id:'gap',x0:-18,x1:-15,y0:2.8,y1:8,still:{x0:-21,x1:-11.5,y0:1,y1:8}},
   {id:'beam',x0:-9.5,x1:-5,y0:5.4,y1:9,still:{x0:-10.5,x1:-4,y0:5,y1:10.2}}]
