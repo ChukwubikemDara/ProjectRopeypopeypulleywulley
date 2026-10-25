@@ -9,6 +9,10 @@ const {Prologue,RaceVoice}=require('./prologue.cjs');
 const sectionStart=(c,course)=>{const real=c.body.translation().x,x=course.mirror?-Math.abs(real):real,flip=course.mirror&&real>0,stations=Object.values(course.stations||{}).sort((a,b)=>a.x-b.x);const at=stations.filter(s=>s.x<=x+.5).at(-1)||stations[0];return flip?{...at,x:-at.x}:at;};
 // A recording in client/narration/<id>.<ext> replaces the synthesized voice for that line.
 // Lengths of the recordings (seconds, by line id), written when recordings are added, so lines never overlap.
+// The laptop's address on the current network, looked up fresh each time (Wi-Fi changes, the address changes).
+// A home-style private address wins; otherwise any real address (campus networks hand out public ones).
+// local-ip.sh resolves <a-b-c-d>.local-ip.sh to a.b.c.d for any address, so the HTTPS link works on both.
+function lanAddress(){const all=Object.values(os.networkInterfaces()).flat().filter(a=>a?.family==='IPv4'&&!a.internal&&!a.address.startsWith('169.254.'));return(all.find(a=>/^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(a.address))||all[0])?.address;}
 function loadRecordings(){try{setRecorded(JSON.parse(fs.readFileSync(path.join(__dirname,'client','narration','durations.json'),'utf8')));}catch{setRecorded({});}}
 function narrationAudio(id){for(const ext of ['mp3','m4a','wav','ogg'])if(fs.existsSync(path.join(__dirname,'client','narration',`${id}.${ext}`)))return`/lab/narration/${id}.${ext}`;return null;}
 const {TUNABLE}=require('./main-config.cjs');
@@ -34,8 +38,8 @@ async function createServer({courses=Courses.all}={}){
  });
  app.get('/qr.svg',async(req,res)=>{try{res.type('svg').send(await QR.toString(String(req.query.url||'').slice(0,400),{type:'svg',margin:1}));}catch{res.sendStatus(400);}});
  app.get('/lab-info',(req,res)=>{
-   const ip=Object.values(os.networkInterfaces()).flat().find(a=>a.family==='IPv4'&&!a.internal)?.address;
-   const origin=process.env.PUBLIC_URL?.replace(/\/$/,'')||app.locals.secureOrigin||(req.secure?`https://${req.headers.host}`:ip?`http://${ip}:${server.address()?.port||3010}`:`http://${req.headers.host}`);
+   const ip=lanAddress(),secure=app.locals.securePort&&ip?`https://${ip.replace(/\./g,'-')}.local-ip.sh:${app.locals.securePort}`:null;
+   const origin=process.env.PUBLIC_URL?.replace(/\/$/,'')||secure||(req.secure?`https://${req.headers.host}`:ip?`http://${ip}:${server.address()?.port||3010}`:`http://${req.headers.host}`);
    res.json({phone:origin+'/phone',secure:origin.startsWith('https:'),course:sim.course.name,debug:process.env.LAB_DEBUG==='1'});
  });
  app.use(express.static(pub));
@@ -125,8 +129,7 @@ if(require.main===module)createServer().then(({app,server,io})=>{
  const port=Number(process.env.PORT||3010);server.listen(port,()=>console.log(`Rapier lab: http://localhost:${port}/screen · phone: /phone`));
  const cert=process.env.TLS_CERT||path.join(__dirname,fs.existsSync(path.join(__dirname,'certs/server.pem'))?'certs/server.pem':'../certs/server.pem'),key=process.env.TLS_KEY||path.join(__dirname,fs.existsSync(path.join(__dirname,'certs/server.key'))?'certs/server.key':'../certs/server.key');
  if(fs.existsSync(cert)&&fs.existsSync(key)){const secure=https.createServer({cert:fs.readFileSync(cert),key:fs.readFileSync(key)},app);io.attach(secure);const port=Number(process.env.HTTPS_PORT||3450);
-  const ip=Object.values(os.networkInterfaces()).flat().find(a=>a.family==='IPv4'&&!a.internal&&/^(10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(a.address))?.address;
-  if(ip)app.locals.secureOrigin=`https://${ip.replace(/\./g,'-')}.local-ip.sh:${port}`;
-  secure.listen(port,()=>console.log('HTTPS phone: '+(app.locals.secureOrigin||`https://localhost:${port}`)+'/phone'));}
+  app.locals.securePort=port; // the join link is worked out per request, so it follows the laptop onto a new network
+  secure.listen(port,()=>{const ip=lanAddress();console.log('HTTPS phone: '+(ip?`https://${ip.replace(/\./g,'-')}.local-ip.sh:${port}`:`https://localhost:${port}`)+'/phone');});}
 }).catch(e=>{console.error(e);process.exitCode=1;});
 module.exports={createServer};
