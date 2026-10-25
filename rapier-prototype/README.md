@@ -20,9 +20,21 @@ npm run start:3d
 
 Physical iPhone motion needs trusted HTTPS. With the ignored local `certs/` directory present, this server also serves HTTPS on port 3450, and the spectator QR uses it automatically. On the current network: https://10-0-0-81.local-ip.sh:3450/phone. The user previously confirmed iPhone Safari motion over HTTPS. Calibration still requires explicit completion and reports actual tilt/acceleration delivery.
 
+## Scenic lobby and motion Kick update
+
+The lobby now frames a scenic section of the selected world, with the existing character model used for two decorative dangling climbers. Snowbound adds smooth layered snow peaks, sculpted snow-covered rocks and clouds; forest adds layered canopy and drifting pollen/leaves; campus adds distant academic roofs, a clock tower, warm foliage and pennants. These props are decorative, without colliders. Course geometry, physics, downward gravity and the scripted prologue are unchanged.
+
+Ambient motion uses ordinary Three.js scene objects and one capped particle draw (100 desktop / 40 phone). Phones omit the decorative character models. Props animate more slowly during play, and reduced-motion preference stops the decorative movement and lobby camera drift. Course swaps dispose the old sky texture and decorative resources; animated transforms explicitly opt out of the static transform freeze. Renderer FPS/draw/geometry metrics are available as canvas data attributes for QA, not a new gameplay overlay.
+
+The menu keeps a real QR and join link visible, puts technical controls under Host settings, preserves keyboard focus while the roster updates, and supports narrow screens. Returning to Menu from results uses the existing host course-selection action, because the server's end-round action only accepts a playing round.
+
+Motion-mode LEGS/solo players again have a Kick button alongside the shove gesture. Jump/Tuck buttons remain touch-mode controls. Calibration, roles, shared motion/button lockout and server cooldowns remain enforced. The prologue instructions were not changed. Browser checks verified the actual Kick control and out-of-range feedback; physical-phone comfort still needs user testing.
+
+Additional tests: `menu-check.cjs` verifies focus, host permissions and results navigation; `ambience-check.cjs` uses real Three.js objects to verify animation, reduced motion, phone limits, lobby-only actors and sky cleanup. The existing physics/multiplayer suite remains required.
+
 ## Phone controls update (milestone 1)
 
-Motion remains primary. LEGS and solo players always have a Kick button. Settings → Button controls optionally adds Jump and Tuck. ARMS never see or send leg actions. Buttons and motion share the existing gesture path, server role checks, cooldowns and a short client lockout, preventing a tap/jostle double trigger.
+Motion remains primary. LEGS and solo players always have a Kick button. Jump and Tuck buttons appear in touch mode. ARMS never see or send leg actions. Buttons and motion share the existing gesture path, server role checks, cooldowns and a short client lockout, preventing a tap/jostle double trigger.
 
 Choosing “Continue with touch controls” enables sensor-free aiming plus all action buttons. Drag the aim pad (or focus it and use arrows); Center resets it. Aim stays where released so a player can aim, then close a hand pad. Settings can switch back to motion; Enable motion also does so. Touch mode suppresses sensor gestures while retaining the button path.
 

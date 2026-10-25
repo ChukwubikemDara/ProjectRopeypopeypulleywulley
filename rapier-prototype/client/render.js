@@ -1,16 +1,18 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
+import {createAmbience} from './ambience.js';
 import {decorateBiome} from './biomes.js';
 import {createAlpineCharacter} from '/js/alpine-character.js';
 const phone=document.body.classList.contains('phone');
 const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(phone?48:40,innerWidth/innerHeight,.1,320);
 const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(devicePixelRatio,phone?1.5:2));
+renderer.domElement.setAttribute('role','img');renderer.domElement.setAttribute('aria-label','Live 3D climbing world');
 window.Render3D={renderer,fps:60};
 const MAX_RATIO=Math.min(devicePixelRatio||1,phone?1.5:2),MIN_RATIO=phone?.6:1;
 const perf={frames:0,since:performance.now(),goodFor:0};let frameNo=0;
 function adaptQuality(now){
- perf.frames++;if(now-perf.since<1000)return;const fps=Math.round(perf.frames*1000/(now-perf.since));perf.frames=0;perf.since=now;window.Render3D.fps=fps;
+ perf.frames++;if(now-perf.since<1000)return;const fps=Math.round(perf.frames*1000/(now-perf.since));perf.frames=0;perf.since=now;window.Render3D.fps=fps;renderer.domElement.dataset.fps=String(fps);renderer.domElement.dataset.drawCalls=String(renderer.info.render.calls);renderer.domElement.dataset.geometries=String(renderer.info.memory.geometries);
  const r=renderer.getPixelRatio();if(fps<45&&r>MIN_RATIO){renderer.setPixelRatio(Math.max(MIN_RATIO,r-.2));perf.goodFor=0;}else if(fps>=57&&r<MAX_RATIO&&++perf.goodFor>=2){renderer.setPixelRatio(Math.min(MAX_RATIO,r+.1));perf.goodFor=0;}
  renderer.shadowMap.autoUpdate=!(fps<45&&renderer.getPixelRatio()<=MIN_RATIO);
 }
@@ -29,10 +31,11 @@ const ball=new THREE.SphereGeometry(1,24,18);
 function puff(pos,scale,material=snow){const m=mesh(ball,material,pos);m.scale.set(...scale);return m;}
 function box(pos,scale,material){return mesh(new RoundedBoxGeometry(...scale,3,.08),material,pos);}
 function prism(points,depth,material){const shape=new THREE.Shape();points.forEach(([x,y],i)=>i?shape.lineTo(x,y):shape.moveTo(x,y));shape.closePath();const g=new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:false});g.translate(0,0,-depth/2);return mesh(g,material);}
-let level=null,flag=null;const holdModels=new Map(),objectModels=new Map();
+let level=null,flag=null,ambience=null;const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');const holdModels=new Map(),objectModels=new Map();
 const models=new Map(),targets=new Map(),tempQ=new THREE.Quaternion();
 const persistentMaterials=new Set([rock,snow,metal,rust,dark,wood,...holdMats]);
 function clearLevel(){
+ if(ambience){scene.remove(ambience.hero);ambience.dispose();ambience=null;}
  const geometries=new Set(),materials=new Set(),textures=new Set();
  const roots=[terrainGroup,...[...objectModels.values()].map(o=>o.root)];
  for(const root of roots){root.traverse(o=>{if(o.geometry&&o.geometry!==ball)geometries.add(o.geometry);for(const m of [o.material].flat().filter(Boolean))if(!persistentMaterials.has(m)){materials.add(m);if(m.map)textures.add(m.map);}});if(root!==terrainGroup)scene.remove(root);}
@@ -46,11 +49,12 @@ function clearLevel(){
 function build(L){
  if(level&&level.revision===L.revision&&level.id===L.id)return;if(level)clearLevel();level=L;
  const palettes={snow:['#b9d9e5','#c2dae3','#8d99a4','#f4f3e9','#bb9271','#ffe0b5','#c3e6ff','#837078'],forest:['#b5cec2','#b5cec2','#9b805e','#9cba7b','#a68a64','#fff0c6','#d3e8d3','#6f806a'],campus:['#c8dce5','#c8dce5','#d8c4a4','#a8bc87','#d9c39f','#ffe4bd','#dce9f1','#938a82']};
- const palette=palettes[L.biome]||palettes.snow;scene.background.set(palette[0]);scene.fog.color.set(palette[1]);rock.color.set(palette[2]);snow.color.set(palette[3]);wood.color.set(palette[4]);sun.color.set(palette[5]);hemisphere.color.set(palette[6]);hemisphere.groundColor.set(palette[7]);
+ const palette=palettes[L.biome]||palettes.snow;scene.background=new THREE.Color(palette[0]);scene.fog.color.set(palette[1]);rock.color.set(palette[2]);snow.color.set(palette[3]);wood.color.set(palette[4]);sun.color.set(palette[5]);hemisphere.color.set(palette[6]);hemisphere.groundColor.set(palette[7]);scene.fog.near=48;scene.fog.far=170;
  document.querySelector('.lab-title span')?.replaceChildren(document.createTextNode(L.kind==='practice'?'TETHERED / PROLOGUE':'TETHERED / '+({forest:'FOREST',campus:'OLD MAIN'}[L.biome]||'SNOWBOUND')));
  document.querySelector('.lab-title h1')?.replaceChildren(document.createTextNode(L.kind==='practice'?'Two people required.':({forest:'Branch management.',campus:'Old Main. New heights.'}[L.biome]||'The long way through.')));
  document.querySelector('.lab-title p')?.replaceChildren(document.createTextNode(L.kind==='practice'?'Two of you. One body. Listen to the narrator.':'Two phones. One climber. Make it to the flag.'));
- for(const t of L.terrain.filter(t=>(L.biome==='snow'||t.kind!=='boundary')&&t.kind!=='barrier'))prism(t.pts,L.depth,t.kind==='pipe'?metal:t.kind==='crate'?rust:t.kind==='ridge'||t.kind==='roof'?dark:t.kind==='bark'?wood:t.kind==='grass'||t.kind==='moss'?snow:rock);
+ for(const t of L.terrain.filter(t=>(L.biome==='snow'||t.kind!=='boundary')&&t.kind!=='barrier'))prism(t.pts,L.depth,t.kind==='pipe'?metal:t.kind==='crate'?rust:t.kind==='roof'&&L.biome==='campus'?rock:t.kind==='ridge'||t.kind==='roof'?dark:t.kind==='bark'?wood:t.kind==='grass'||t.kind==='moss'?snow:rock);
+ for(const t of L.terrain.filter(t=>t.kind==='roof'&&L.biome==='campus')){const [a,b]=t.pts.slice(2);prism([[a[0],a[1]-.18],[b[0],b[1]-.18],b,a],L.depth+.04,dark);}
  if(L.pipe){
  const P=L.pipe,R=P.gap/2+P.slab/2,angle=Math.atan2(P.dir[1],P.dir[0]);
  // Open shell reveals the physical course. Its floor and roof match the source data.
@@ -101,11 +105,9 @@ function build(L){
  for(let x=L.bounds.x0;x<L.bounds.x1;x+=3){const y=surface(x)-2,m=puff([x,y,-3.2],[2.2,2.1,2.3],rock);m.rotation.z=Math.sin(x)*.2;puff([x,y+1.6,-3.2],[2.3,.35,2.3]);}
  function pine(x,y,z,size){const pts=[];for(let i=0;i<=40;i++){const t=i/40;pts.push(new THREE.Vector2(Math.max(.008,(1-t)*size*.32*(.8+.2*Math.cos(t*Math.PI*8))),t*size));}const g=new THREE.LatheGeometry(pts,20),p=g.attributes.position,n=g.attributes.normal,cols=[];for(let i=0;i<p.count;i++){const c=new THREE.Color('#477b77').lerp(new THREE.Color('#edf3ed'),THREE.MathUtils.smoothstep(n.getY(i),.1,.75));cols.push(c.r,c.g,c.b);}g.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));mesh(g,new THREE.MeshStandardMaterial({vertexColors:true,roughness:1}),[x,y,z]);}
  for(const x of [L.spawn.x0,L.spawn.x1+1.5,L.finish.x-3,L.finish.x-9])pine(x,surface(x),-4.5,3+Math.sin(x)*.7);
- for(let layer=0;layer<3;layer++){
-  const shape=new THREE.Shape();shape.moveTo(-50,-5);for(let i=0;i<17;i++){shape.lineTo(-50+i*10,5+layer*3);shape.lineTo(-45+i*10,17+Math.sin(i*2+layer)*6+layer*3);}shape.lineTo(120,-5);shape.closePath();const m=mesh(new THREE.ShapeGeometry(shape),new THREE.MeshBasicMaterial({color:['#91b3c3','#afcbd6','#c8dde5'][layer]}),[0,0,-25-layer*17]);m.castShadow=false;
- }
  }
  decorateBiome(L,{mesh,puff,box,prism,mat,rock,snow,wood,dark});
+ ambience=createAmbience(L,{mesh,puff,box,mat,phone,root:terrainGroup});scene.background=ambience.sky;scene.add(ambience.hero);
  const pole=mesh(new THREE.CylinderGeometry(.035,.035,2,8),dark,[L.finish.x,L.finish.y+1,0]);flag=mesh(new THREE.PlaneGeometry(1,.5,12,4),rust.clone(),[L.finish.x+.5,L.finish.y+1.7,0]);flag.material.side=THREE.DoubleSide;flag.userData.base=new Float32Array(flag.geometry.attributes.position.array);
  // Signs stand behind the climbers (z 0) so they never hide anyone. A sign printed on solid rock sits on its front face instead: nobody can stand inside rock.
  const inside=(pts,x,y)=>pts.every((a,i)=>{const b=pts[(i+1)%pts.length];return (b[0]-a[0])*(y-a[1])-(b[1]-a[1])*(x-a[0])>=0;});
@@ -121,9 +123,10 @@ function build(L){
  // Small signs carry main's route cues without filling the phone HUD with instructions.
  for(const sign of L.signs){const canvas=document.createElement('canvas');canvas.width=768;canvas.height=192;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff9e9';ctx.fillRect(0,0,768,192);ctx.fillStyle='#385567';ctx.font='800 54px system-ui';ctx.textAlign='center';ctx.fillText(sign.text,384,76);ctx.font='26px system-ui';ctx.fillText(sign.sub,384,132);const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;const m=mesh(new THREE.PlaneGeometry(4.8,1.2),new THREE.MeshBasicMaterial({map:tex}),[sign.x,sign.y,signDepth(sign)]);m.castShadow=false;}
 
- terrainGroup.traverse(o=>{o.updateMatrix();o.matrixAutoUpdate=false;});for(const {mesh:m,data:h}of holdModels.values())if(h.objectId||h.kind==='twig')m.matrixAutoUpdate=true;terrainGroup.updateMatrixWorld(true);window.LabSetView?.(Net.phase==='playing'?'follow':'overview');
+ terrainGroup.traverse(o=>{o.updateMatrix();o.matrixAutoUpdate=false;});for(const {mesh:m,data:h}of holdModels.values())if(h.objectId||h.kind==='twig')m.matrixAutoUpdate=true;terrainGroup.updateMatrixWorld(true);ambience.activate();window.LabSetView?.(Net.phase==='playing'?'follow':'menu');
 }
 Net.on('level',build);if(Net.level)build(Net.level);
+const isLobby=()=>Net.phase!=='playing'&&Net.phase!=='results';
 const controls=phone?null:new OrbitControls(camera,renderer.domElement);if(controls){controls.enableDamping=true;controls.target.set(25,8,0);}
 window.LabSetView=view=>{
  window.LabView=view;
@@ -133,12 +136,15 @@ window.LabSetView=view=>{
   controls.target.set(cx,cy,0);camera.position.set(cx+4,cy+d*.16,d);controls.update();
  }
 };
-window.LabSetView(Net.phase==='playing'?'follow':'overview');
-Net.on('phase',p=>{if(!phone)window.LabSetView(p==='playing'?'follow':'overview');});
+window.LabSetView(Net.phase==='playing'?'follow':isLobby()?'menu':'overview');
+Net.on('phase',p=>{if(!phone)window.LabSetView(p==='playing'?'follow':p==='results'?'overview':'menu');});
 let previous=performance.now();
 const SUN_OFFSET=new THREE.Vector3(-9,30,18),shadowToLight=new THREE.Matrix4().lookAt(SUN_OFFSET,new THREE.Vector3(),new THREE.Vector3(0,1,0)),lightToShadow=shadowToLight.clone().invert(),tempV=new THREE.Vector3();
 renderer.setAnimationLoop(now=>{
- adaptQuality(now);if(!renderer.shadowMap.autoUpdate&&frameNo++%2===0)renderer.shadowMap.needsUpdate=true;
+ adaptQuality(now);const scenicLobby=!phone&&isLobby()&&window.LabView==='menu';
+ // Slow lobby motion does not need a full shadow-map pass every frame.
+ renderer.shadowMap.autoUpdate=!(scenicLobby||window.Render3D.fps<45&&renderer.getPixelRatio()<=MIN_RATIO);
+ if(!renderer.shadowMap.autoUpdate&&frameNo++%(scenicLobby?4:2)===0)renderer.shadowMap.needsUpdate=true;
  const dt=Math.min(.05,(now-previous)/1000);previous=now;const s=Net.sample(),seen=new Set();
  if(s){
   const broken=new Set(s.broken||[]),strain=new Map(s.strain||[]);
@@ -151,7 +157,7 @@ renderer.setAnimationLoop(now=>{
   // Quaternion interpolation follows the shortest rotational arc.
   if(!m.rotation)m.rotation=new THREE.Quaternion(c.rotation.x,c.rotation.y,c.rotation.z,c.rotation.w);
   tempQ.set(c.rotation.x,c.rotation.y,c.rotation.z,c.rotation.w);m.rotation.slerp(tempQ,1-Math.exp(-dt*18));
-  m.pose({...c,rotation:m.rotation},dt,now/1000);
+  m.root.visible=phone||!isLobby()||window.LabView!=='menu';if(m.root.visible)m.pose({...c,rotation:m.rotation},dt,now/1000);
   if(phone&&c.id===Net.me){
    c.hands.forEach((h,i)=>{const key=c.id+':'+i;let target=targets.get(key);if(!target){target=mesh(new THREE.TorusGeometry(.21,.018,6,24),holdMats[i],null,scene);targets.set(key,target);}target.visible=!h.grip&&h.target?.id!=null;if(h.target)target.position.set(h.target.x,h.target.y,h.target.z+.06);});
   }
@@ -163,12 +169,19 @@ renderer.setAnimationLoop(now=>{
   const distance=7.3*Math.max(1,.62/camera.aspect);
   const offset=new THREE.Vector3(1.6,1.4,distance);
   camera.position.lerp(target.clone().add(offset),1-Math.exp(-dt*5));camera.lookAt(target);
+ }else if(isLobby()&&window.LabView==='menu'){
+  const biome=level?.biome||'snow',portrait=camera.aspect<1,focus={snow:[14,10],forest:[14,10.5],campus:[17,10]}[biome]||[14,10];
+  const t=reducedMotion.matches?0:now/1000,wave=Math.sin(t*.09)*.55;
+  const target=new THREE.Vector3(focus[0]+(portrait?0:2)+wave,focus[1]+(portrait?2:0),-2),distance=portrait?40:31,blend=reducedMotion.matches?1:1-Math.exp(-dt*4);
+  controls.enabled=false;controls.target.lerp(target,blend);camera.position.lerp(target.clone().add(new THREE.Vector3(2+wave,3,distance)),blend);camera.lookAt(controls.target);
  }else if(window.LabView==='follow'&&s?.climbers.length){
+  controls.enabled=true;
   const cs=s.climbers,xs=cs.map(c=>c.x),ys=cs.map(c=>c.y);const center=new THREE.Vector3((Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2+.8,0);
   const spreadX=Math.max(...xs)-Math.min(...xs)+9,spreadY=Math.max(...ys)-Math.min(...ys)+6,tan=Math.tan(THREE.MathUtils.degToRad(camera.fov/2));const d=Math.max(12,spreadX/(2*tan*camera.aspect),spreadY/(2*tan));
   controls.target.lerp(center,1-Math.exp(-dt*3));camera.position.lerp(center.clone().add(new THREE.Vector3(3,4,d)),1-Math.exp(-dt*3));controls.update();
- }else if(controls){if(window.LabView==='follow'){window.LabSetView('overview');window.LabView='follow';}controls.update();}
- if(flag){const p=flag.geometry.attributes.position,base=flag.userData.base;for(let i=0;i<p.count;i++){const x=base[i*3]+.5;p.setZ(i,Math.sin(now/220-x*4)*.12*x);}p.needsUpdate=true;flag.geometry.computeVertexNormals();}
+ }else if(controls){controls.enabled=true;if(window.LabView==='follow'){window.LabSetView('overview');window.LabView='follow';}controls.update();}
+ ambience?.update(now/1000,{reduced:reducedMotion.matches,lobby:!phone&&isLobby()&&window.LabView==='menu'});
+ if(flag&&!reducedMotion.matches){const p=flag.geometry.attributes.position,base=flag.userData.base;for(let i=0;i<p.count;i++){const x=base[i*3]+.5;p.setZ(i,Math.sin(now/220-x*4)*.12*x);}p.needsUpdate=true;flag.geometry.computeVertexNormals();}
  const focus=phone?(s?.climbers.find(c=>c.id===Net.me)||s?.climbers[0]):null;
  const lightTarget=phone?new THREE.Vector3(focus?.x||0,focus?.y||1,0):controls.target;
  // Shadows crawl and shimmer when the shadow box slides or resizes smoothly with the camera, so its size moves in 4 m steps and its centre snaps to whole shadow texels.

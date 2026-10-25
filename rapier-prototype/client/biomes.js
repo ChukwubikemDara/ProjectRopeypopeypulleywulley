@@ -46,8 +46,8 @@ export function decorateBiome(L,{mesh,puff,box,prism,mat,rock,snow,wood,dark}){
   for(const x of [32.5,34.2,35.8,37.5])cylinder([x,16.6,-3],[x,18.5,-3],.15,trim);
   const cupola=mesh(new THREE.ConeGeometry(4,2,4),navy,[35,19.4,-3]);cupola.rotation.y=Math.PI/4;cylinder([35,20.4,-3],[35,21.7,-3],.05,gold);puff([35,21.6,-3],[.15,.15,.15],gold);
   // Stone joints and sill bands follow the collision silhouette, including the roof climb.
-  for(const t of L.terrain)if(t.kind==='stone'){
-   const x0=t.pts[0][0],x1=t.pts[1][0],top=t.pts[2][1];box([(x0+x1)/2,top-.12,1.73],[x1-x0,.18,.12],trim);
+  for(const t of L.terrain)if(t.kind==='stone'||t.kind==='roof'){
+   const x0=t.pts[0][0],x1=t.pts[1][0],top=Math.min(t.pts[2][1],t.pts[3][1]);box([(x0+x1)/2,top-.12,1.73],[x1-x0,.18,.12],trim);
    for(let y=1;y<top-.4;y+=1.1)box([(x0+x1)/2,y,1.72],[x1-x0,.018,.025],stone);
    for(let x=x0+1;x<x1-.5;x+=2.2)for(let y=1.7;y<top-1;y+=2.6){box([x,y,1.77],[.88,1.25,.12],trim);box([x,y,1.85],[.67,1.05,.08],windowMat);box([x,y,1.91],[.055,1.05,.035],trim);box([x,y,1.92],[.67,.045,.035],trim);}
   }
@@ -55,10 +55,5 @@ export function decorateBiome(L,{mesh,puff,box,prism,mat,rock,snow,wood,dark}){
   for(let i=1;i<route.length-1;i++){const [x,y]=route[i],m=mesh(new THREE.ConeGeometry(.23,.5,3),i%2?navy:gold,[x,y-.35,-.5]);m.rotation.z=Math.PI;}
   for(let i=0;i<10;i++){const h=4+(i%3)*1.4;box([-9+i*7,h/2,-23],[4.5,h,4],mat(i%2?'#b7c6cd':'#abbac6'));}
   for(const x of [0,4,20,29,42])tree(x,0,-9,5,.7);
- }else{
-  // Extra rock faces turn the distant sawtooth silhouettes into layered alpine peaks.
-  const shades=['#9eb9c5','#afc8d0','#c3d7dc'];
-  for(let i=0;i<9;i++){const x=-10+i*9,h=12+Math.sin(i*2)*5,z=-14-(i%3)*8,r=5+(i%3),m=mesh(new THREE.ConeGeometry(r,h,9),mat(shades[i%3]),[x,h/2+3,z]);m.rotation.y=i*.7;const cap=mesh(new THREE.ConeGeometry(r*.37*1.06,h*.37*1.06,9),snow,[x,3+h-h*.37*1.06/2+.1,z]);// a touch larger than the peak's tip, so the two surfaces never overlap and flicker
-   cap.rotation.y=m.rotation.y;}
  }
 }
