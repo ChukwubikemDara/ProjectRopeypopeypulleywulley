@@ -6,7 +6,7 @@
  on(type,fn){(listeners[type]??=[]).push(fn);},fire(type,data){if(type==='phase'&&data==='playing'&&!this.calibrated)return;if(type==='event'&&data?.type==='start'&&!this.calibrated)return;for(const fn of listeners[type]||[])fn(data);},
  nameOf(id){return this.roster.find(c=>c.id===id)?.name||'Climber';},colorOf(id){return this.roster.find(c=>c.id===id)?.color||'#42b9ab';},
  completeCalibration(){this.calibrated=true;this.fire('phase',this.phase);},
- progress(x,y=0){const P=this.level?.path;if(!P)return 0;let total=0,best={d:Infinity,at:0};for(let i=0;i<P.length-1;i++){const [ax,ay]=P[i],[bx,by]=P[i+1],L=Math.hypot(bx-ax,by-ay),t=Math.max(0,Math.min(1,((x-ax)*(bx-ax)+(y-ay)*(by-ay))/(L*L))),d=Math.hypot(x-ax-(bx-ax)*t,y-ay-(by-ay)*t);if(d<best.d)best={d,at:total+L*t};total+=L;}return best.at/total;},
+ progress(x,y=0){const P=this.level?.path;if(!P)return 0;let total=0,best={d:Infinity,at:0};for(let i=0;i<P.length-1;i++){const [ax,ay]=P[i],[bx,by]=P[i+1],L=Math.hypot(bx-ax,by-ay),t=Math.max(0,Math.min(1,((x-ax)*(bx-ax)+(y-ay)*(by-ay))/(L*L))),d=Math.hypot(x-ax-(bx-ax)*t,y-ay-(by-ay)*t);if(d<best.d)best={d,at:total+L*t};total+=L;}return Math.max(0,Math.min(1,(best.at-(this.level.progressTolerance==null?0:Math.max(0,best.d-this.level.progressTolerance)*3))/total));},
  sample(){
   if(!current)return null;
   const k=Math.min(1,(performance.now()-at)/interval),old=new Map((previous?.climbers||[]).map(c=>[c.id,c]));

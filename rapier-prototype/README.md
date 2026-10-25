@@ -1,4 +1,4 @@
-# Tethered / Snowbound — complete 3D course
+# Tethered — three 3D race courses
 
 The complete course and gameplay rules from main `8f94284` are adapted to server-side Rapier 3D and the Snowbound presentation. Travel stays centered, with 3D body rotation and swinging. This is the full race, not the earlier pipe-to-ledge slice. The original Planck server remains available as a fallback.
 
@@ -30,7 +30,7 @@ The status card reports actual server jump readiness, combo timing cues, and mis
 
 ## Map loading and shared practice (milestone 2)
 
-The host can choose a built race course in Race controls, start shared Base Camp practice, retry the same map, or advance from results to the next available race map. Forest and Old Main are visibly marked coming soon until milestone 3; there is no disguised duplicate-map rotation. With the current catalog, Snowbound is the only built race and therefore rotates back to itself.
+The host can choose a built race course in Race controls, start shared Base Camp practice, retry the same map, or advance from results to the next available race map. The built catalog now rotates Snowbound → Forest → Campus → Snowbound. Each entry loads distinct collision geometry, holds and scenery.
 
 `courses.cjs` prepares/validates plain course definitions (bounds, convex terrain pieces, finite path segments and unique holds). `Simulation.create(course)` owns that definition and derives collision depth, catch floor, spawn, progress, bounds and finish from it. The server replaces worlds while retaining team identities/roles and tuned settings. Every load has a revision; clients discard the old interpolation buffer and reject stale snapshots. The renderer disposes course-owned meshes, textures, geometries, characters and grip cues before rebuilding. The original mountain course remains data-identical to main.
 
@@ -41,6 +41,16 @@ Use Calibrate & practice together in the phone lobby, or Practice together on th
 Narration uses an original short script, always has captions, and is muted until Enable voice is tapped on that device. Speech uses the browser's optional [Web Speech synthesis API](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesis/speak); absent/failed speech leaves captions working. Mute, hiding tips, leaving practice and backgrounding the page cancel queued speech. Voice quality and availability depend on the device and still need physical-phone listening checks.
 
 Additional checks cover ordered rotation using a distinct test course, repeated world replacements, retained teams, retry versus next-map semantics, stale packet rejection, map availability and host permissions, all five tutorial skills through two controller roles and real physics, dummy impulse, optional voice/mute/captions, and preserving a practice request through touch fallback.
+
+## Three continuous courses (milestone 3)
+
+Snowbound retains the complete main course. Forest “Branch Management” follows roots into a trunk climb, a horizontal bough, an uphill branch and the crown. Falling from the branch can land on a lower catch bough; open space beneath the upper branches permits a return to the roots. Campus “Old Main, New Heights” connects the lawn and portico to a facade climb, cornice, roof and clock tower. These are continuous course silhouettes, not scene transitions. Gravity and phone controls stay the same.
+
+Each race includes one named risky shortcut in `routes.shortcut`: pipe roof, vine line, or bunting line. The vine/bunting grip strains, snaps after 2.4 seconds and regrows after 6.5 seconds; ordinary rungs remain available. Route metadata also records the main line for later shortcut interactions. No sabotage lever is implemented yet.
+
+`race-courses.cjs` defines the new collision silhouettes and holds. `client/biomes.js` adds course-owned layered trees, canopy, bark, campus windows/columns/clock, and alpine peaks. Scenery stays behind the interaction plane; apparent footholds along the route use the same coordinates as physical terrain. Per-biome sky, ground and light colors keep the existing soft characters readable. Race progress on the new elevated maps discounts positions far below the route, and finish detection still requires the correct elevation.
+
+`biome-check.cjs` checks existing leg hops, real spherical grip joints and coordinated lip-clearing jumps at every new vertical section, fast falls on each terrain section without recovery masking, shortcut snap/regrow, and elevated finish detection. These are isolated section fixtures, not an automated full-course playthrough. `rotation-check.cjs` checks the actual three-course server rotation/retry and retained two-controller roles. Full physical two-phone races, difficulty tuning, and performance measurements on the iPhone remain the next playtest.
 
 ## Full course and rules
 

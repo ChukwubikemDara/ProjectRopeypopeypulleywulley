@@ -19,7 +19,7 @@ function progressAt(x,y,definition=course){
   const [ax,ay] =definition.path[i],[bx,by]=definition.path[i+1],L=Math.hypot(bx-ax,by-ay),t=clamp(((x-ax)*(bx-ax)+(y-ay)*(by-ay))/(L*L),0,1),d=Math.hypot(x-ax-(bx-ax)*t,y-ay-(by-ay)*t);
   if(d<best.d)best={d,at:total+L*t};total+=L;
  }
- return best.at/total;
+ return clamp((best.at-(definition.progressTolerance==null?0:Math.max(0,best.d-definition.progressTolerance)*3))/total,0,1);
 }
 const stats=()=>({drops:0,saves:0,biggestFall:0,boosts:0,combos:0,kicks:0,pushes:0});
 class Simulation {

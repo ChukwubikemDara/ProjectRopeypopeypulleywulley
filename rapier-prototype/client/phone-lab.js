@@ -57,7 +57,7 @@
   if(Net.me)emit('motion-report',r);
  },500);
  Net.on('results',awards=>{const win=awards.find(a=>a.val==='summit');if(win)document.getElementById('winnerName').textContent=Net.nameOf(win.id)+' finished the race';});
- function levelTitle(l){document.querySelector('.edition').textContent=l.kind==='practice'?'▲ SNOWBOUND · BASE CAMP':'▲ SNOWBOUND · '+l.name.split(' · ').at(-1).toUpperCase();}Net.on('level',levelTitle);if(Net.level)levelTitle(Net.level);
+ function levelTitle(l){document.querySelector('.edition').textContent=l.kind==='practice'?'▲ SNOWBOUND · BASE CAMP':'▲ '+l.name.toUpperCase();}Net.on('level',levelTitle);if(Net.level)levelTitle(Net.level);
  Net.on('you',()=>queueMicrotask(()=>{
   const legs=Net.role==='legs';
   document.getElementById('roleHow').textContent=legs?'Lean to swing your feet. Hop to jump from footing. While hanging, hop as your arms teammate releases for a combo. Squat to tuck; shove or tap Kick to nudge nearby rivals. Jump and tuck buttons are available in settings.':Net.role==='arms'?'Tilt to position your hands. Hold each pad to grab a nearby hold; release to let go. Your legs teammate hops to jump. While hanging, release together with their hop for a combo.':'Tilt aims your hands; hold the pads to grip. Hop to jump from footing. Hanging? Hop and release the pads together for a combo. Travel stays centered.';

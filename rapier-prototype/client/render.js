@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {RoundedBoxGeometry} from 'three/addons/geometries/RoundedBoxGeometry.js';
+import {decorateBiome} from './biomes.js';
 import {createAlpineCharacter} from '/js/alpine-character.js';
 const phone=document.body.classList.contains('phone');
 const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(phone?48:40,innerWidth/innerHeight,.1,320);
@@ -15,7 +16,7 @@ function adaptQuality(now){
 }
 renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=.95;renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;document.getElementById('game').append(renderer.domElement);
 scene.background=new THREE.Color('#b9d9e5');scene.fog=new THREE.Fog('#c2dae3',100,280);
-scene.add(new THREE.HemisphereLight('#c3e6ff','#837078',1.7));
+const hemisphere=new THREE.HemisphereLight('#c3e6ff','#837078',1.7);scene.add(hemisphere);
 const sun=new THREE.DirectionalLight('#ffe0b5',2.7);sun.position.set(16,42,24);sun.target.position.set(25,8,0);scene.add(sun.target);sun.castShadow=true;sun.shadow.mapSize.set(phone?1024:2048,phone?1024:2048);Object.assign(sun.shadow.camera,{left:-40,right:40,top:30,bottom:-25,near:1,far:110});sun.shadow.normalBias=.025;scene.add(sun);
 const rim=new THREE.DirectionalLight('#a1d8f2',1.2);rim.position.set(25,15,-15);scene.add(rim);
 const mat=color=>new THREE.MeshStandardMaterial({color,roughness:.85});
@@ -38,14 +39,16 @@ function clearLevel(){
  for(const g of geometries)g.dispose();for(const t of textures)t.dispose();for(const m of materials)m.dispose();
  for(const m of models.values()){scene.remove(m.root);m.dispose();}models.clear();
  for(const target of targets.values()){scene.remove(target);target.geometry.dispose();}targets.clear();
- renderer.renderLists.dispose();
+ renderer.renderLists.dispose();renderer.shadowMap.needsUpdate=true;
 }
 function build(L){
  if(level&&level.revision===L.revision&&level.id===L.id)return;if(level)clearLevel();level=L;
- document.querySelector('.lab-title span')?.replaceChildren(document.createTextNode(L.kind==='practice'?'TETHERED / BASE CAMP':'TETHERED / SNOWBOUND'));
- document.querySelector('.lab-title h1')?.replaceChildren(document.createTextNode(L.kind==='practice'?'A little coordination.':'The long way through.'));
+ const palettes={snow:['#b9d9e5','#c2dae3','#8d99a4','#f4f3e9','#bb9271','#ffe0b5','#c3e6ff','#837078'],forest:['#b5cec2','#b5cec2','#9b805e','#9cba7b','#a68a64','#fff0c6','#d3e8d3','#6f806a'],campus:['#c8dce5','#c8dce5','#d8c4a4','#a8bc87','#d9c39f','#ffe4bd','#dce9f1','#938a82']};
+ const palette=palettes[L.biome]||palettes.snow;scene.background.set(palette[0]);scene.fog.color.set(palette[1]);rock.color.set(palette[2]);snow.color.set(palette[3]);wood.color.set(palette[4]);sun.color.set(palette[5]);hemisphere.color.set(palette[6]);hemisphere.groundColor.set(palette[7]);
+ document.querySelector('.lab-title span')?.replaceChildren(document.createTextNode(L.kind==='practice'?'TETHERED / BASE CAMP':'TETHERED / '+({forest:'FOREST',campus:'OLD MAIN'}[L.biome]||'SNOWBOUND')));
+ document.querySelector('.lab-title h1')?.replaceChildren(document.createTextNode(L.kind==='practice'?'A little coordination.':({forest:'Branch management.',campus:'Old Main. New heights.'}[L.biome]||'The long way through.')));
  document.querySelector('.lab-title p')?.replaceChildren(document.createTextNode(L.kind==='practice'?'Practice together. Start the race whenever you are ready.':'Two phones. One climber. Make it to the flag.'));
- for(const t of L.terrain)prism(t.pts,L.depth,t.kind==='pipe'?metal:t.kind==='crate'?rust:t.kind==='ridge'?dark:rock);
+ for(const t of L.terrain.filter(t=>L.biome==='snow'||t.kind!=='boundary'))prism(t.pts,L.depth,t.kind==='pipe'?metal:t.kind==='crate'?rust:t.kind==='ridge'||t.kind==='roof'?dark:t.kind==='bark'?wood:t.kind==='grass'||t.kind==='moss'?snow:rock);
  if(L.pipe){
  const P=L.pipe,R=P.gap/2+P.slab/2,angle=Math.atan2(P.dir[1],P.dir[0]);
  // Open shell reveals the physical course. Its floor and roof match the source data.
@@ -90,6 +93,7 @@ function build(L){
   for(const [x,y]of o.handles){const bar=mesh(new THREE.TorusGeometry(.14,.035,8,20),dark,[x,y,0],group);bar.rotation.y=Math.PI/2;}
   objectModels.set(o.id,{root:group,wheels,previousX:o.x0});
  }
+ if(L.biome==='snow'){
  // Rounded banks and trees sit behind the route; the foreground remains readable.
  const surface=x=>{let y=L.spawn.y;for(const t of L.terrain)if(t.kind==='rock'){const xs=t.pts.map(p=>p[0]),top=Math.max(...t.pts.map(p=>p[1]));if(x>=Math.min(...xs)&&x<=Math.max(...xs)&&top<=L.bounds.y1)y=Math.max(y,top);}if(L.pipe&&x>=L.pipe.f0[0]&&x<=L.pipe.f1[0])y=Math.max(y,(x-L.pipe.f0[0])*L.pipe.dir[1]/L.pipe.dir[0]);return y;};
  for(let x=L.bounds.x0;x<L.bounds.x1;x+=3){const y=surface(x)-2,m=puff([x,y,-3.2],[2.2,2.1,2.3],rock);m.rotation.z=Math.sin(x)*.2;puff([x,y+1.6,-3.2],[2.3,.35,2.3]);}
@@ -98,6 +102,8 @@ function build(L){
  for(let layer=0;layer<3;layer++){
   const shape=new THREE.Shape();shape.moveTo(-50,-5);for(let i=0;i<17;i++){shape.lineTo(-50+i*10,5+layer*3);shape.lineTo(-45+i*10,17+Math.sin(i*2+layer)*6+layer*3);}shape.lineTo(120,-5);shape.closePath();const m=mesh(new THREE.ShapeGeometry(shape),new THREE.MeshBasicMaterial({color:['#91b3c3','#afcbd6','#c8dde5'][layer]}),[0,0,-25-layer*17]);m.castShadow=false;
  }
+ }
+ decorateBiome(L,{mesh,puff,box,prism,mat,rock,snow,wood,dark});
  const pole=mesh(new THREE.CylinderGeometry(.035,.035,2,8),dark,[L.finish.x,L.finish.y+1,0]);flag=mesh(new THREE.PlaneGeometry(1,.5,12,4),rust.clone(),[L.finish.x+.5,L.finish.y+1.7,0]);flag.material.side=THREE.DoubleSide;flag.userData.base=new Float32Array(flag.geometry.attributes.position.array);
  // Small signs carry main's route cues without filling the phone HUD with instructions.
  for(const sign of L.signs){const canvas=document.createElement('canvas');canvas.width=768;canvas.height=192;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff9e9';ctx.fillRect(0,0,768,192);ctx.fillStyle='#385567';ctx.font='800 54px system-ui';ctx.textAlign='center';ctx.fillText(sign.text,384,76);ctx.font='26px system-ui';ctx.fillText(sign.sub,384,132);const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;const m=mesh(new THREE.PlaneGeometry(4.8,1.2),new THREE.MeshBasicMaterial({map:tex}),[sign.x,sign.y,2]);m.castShadow=false;}
