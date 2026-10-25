@@ -118,7 +118,7 @@ Narration: the prologue played only wake, roles and gap (the bots never reach th
 4. **Forest spot (32, 17.8)** and **Campus spot (44.5, 18.3)**: team B stalled there just short of the finish. Check whether the nearest hold ahead is more than ~3.4 m away or behind terrain: use `node tools/playtest.cjs forest 120` and print `level.holds` near that point. If a human would also struggle, add a twig or handle.
 5. **Snowbound ladder base**: consider adding a rung at y ≈ 10.3 at x 24.6, or a box to stand on below rung 7, so the 2.7 m reach is less of a wall. Re-run `snowbound-props-check.cjs`.
 6. **Prologue return ramp**: humans may also miss that you go back to the ledge to jump the gap. Consider an arrow or narrator line when a team sits on the ramp for more than 10 s.
-7. **Port to `prologue-voice`**: the map, audit and rivalry commits were made on `remote-mode`. If `prologue-voice` should get them, cherry-pick every commit after `9aa27da` except remote-only changes, and run the suite there.
+7. ~~Port to `prologue-voice`~~: done. Both branches have the map, rivalry, playtest and handover commits, and both pass the suite.
 
 ## Gotchas
 
@@ -126,3 +126,4 @@ Narration: the prologue played only wake, roles and gap (the bots never reach th
 - `roof-surface-check.cjs` slices `render.js` source between `' for(const t of L.terrain.filter'` and `' if(L.pipe)'` and runs it in a vm. Any new helper used in that range must be stubbed in its context (the `mat` stub was added for exactly this).
 - Bots in `playtest.cjs` only move toward holds ahead within 3.4 m, so "stuck" can be a bot limitation. Confirm a spot with a targeted physics check before changing the map.
 - The ngrok URL changes whenever ngrok restarts. Update `PUBLIC_URL` and `.claude/launch.json`.
+- `course-session-check.cjs` failed once in the full suite (`'race' !== 'practice'` at line 23) and passes when run alone. It's a timing flake: re-run before you chase it.
