@@ -20,15 +20,32 @@ function validateCourse(c){
  return c;
 }
 const mountain=prepareCourse({...source,id:'mountain',biome:'snow',kind:'race',name:'Snowbound · The Long Way Up',source:'main 8f94284 / complete course',routes:{shortcut:{id:'pipe-roof',name:'Over the pipe',holdIds:source.holds.filter(h=>h.kind==='knob'&&h.x<20).map(h=>h.id),path:[[4,1],[7,5],[20,11],[25,9.2]]}}});
-const practice=prepareCourse({id:'practice',biome:'snow',kind:'practice',name:'Base Camp · Practice together',
- bounds:{x0:-2,x1:17,y0:-2,y1:8},spawn:{x0:.8,x1:2.4,y:0},finish:{x:15.5,y:0,zoneX:15},
- terrain:[{kind:'rock',pts:[[-2,-2],[17,-2],[17,0],[-2,0]]},{kind:'rock',pts:[[3.5,0],[5.2,0],[5.2,1.2],[3.5,1.2]]},{kind:'boundary',pts:[[-2,-2],[-1,-2],[-1,7],[-2,7]]},{kind:'boundary',pts:[[16.5,-2],[17,-2],[17,7],[16.5,7]]}],
- holds:[{id:'first-left',x:2.1,y:1.75,kind:'knob'},{id:'first-right',x:2.65,y:1.75,kind:'knob'},
- {id:'bar-left',x:5.8,y:3.5,kind:'handle'},{id:'bar-right',x:6.35,y:3.5,kind:'handle'},{id:'bar-next',x:7.2,y:3.5,kind:'handle'}],
- objects:[{id:'practice-dummy',kind:'dummy',w:.65,h:1,x0:12,x1:12,y:.55,speed:0,handles:[]}],
- path:[[1,1],[4,2.2],[6.1,2.7],[9,1],[15.5,1]],
- signs:[{x:2.4,y:3.3,text:'AIM + GRAB',sub:'Tilt toward a hold. Hold a thumb pad.'},{x:6.1,y:5.2,text:'BETTER TOGETHER',sub:'Legs hop. Arms release. Both laugh.'},{x:12,y:3.2,text:'KICK STATION',sub:'Your very patient training partner.'}],
- stations:{aim:{x:1.6,y:1.05},grip:{x:2.35,y:1.05},hop:{x:2.35,y:1.05},combo:{x:6.1,y:2.6},kick:{x:11.45,y:1.05}}
+// The prologue: a short narrated climb that teaches by doing. Each section needs the move it introduces;
+// falling only ever drops you back a section, never to the start.
+// A plain hop lifts the feet about 2.5 m, so the trench (3.2 m) needs a grip and the wall (4.2 m) needs the combo.
+const practice=prepareCourse({id:'practice',biome:'snow',kind:'practice',name:'Prologue · The Foot of the Mountain',
+ bounds:{x0:-2,x1:30,y0:-4,y1:14},spawn:{x0:.6,x1:2.6,y:0},finish:{x:26.5,y:5.6,zoneX:25.7},
+ terrain:[
+  {id:'meadow',kind:'rock',pts:[[-2,-4],[7,-4],[7,0],[-2,0]]},
+  {id:'step',kind:'rock',pts:[[7,-4],[10,-4],[10,1.4],[7,1.4]]},          // first hop
+  {id:'trench',kind:'rock',pts:[[10,-4],[14,-4],[14,-1.8],[10,-1.8]]},    // too deep to hop out of: grab the wall knobs
+  {id:'shelf',kind:'rock',pts:[[14,-4],[18,-4],[18,1.4],[14,1.4]]},
+  {id:'wall',kind:'rock',pts:[[18,-4],[30,-4],[30,5.6],[18,5.6]]},        // too tall to hop: hang, then hop + let go together
+  {id:'left-edge',kind:'boundary',pts:[[-2,-4],[-1,-4],[-1,13],[-2,13]]},
+  {id:'right-edge',kind:'boundary',pts:[[29,-4],[30,-4],[30,13],[29,13]]}],
+ holds:[
+  {id:'bar-1',x:10.7,y:3.6,kind:'handle'},{id:'bar-2',x:11.6,y:3.6,kind:'handle'},{id:'bar-3',x:12.5,y:3.6,kind:'handle'},{id:'bar-4',x:13.4,y:3.6,kind:'handle'},
+  {id:'trench-lip',x:13.9,y:1.55,kind:'knob'},
+  {id:'wall-low',x:17.85,y:3.1,kind:'rung'},{id:'wall-high',x:17.85,y:3.9,kind:'rung'},
+  {id:'wall-lip',x:18.1,y:5.68,kind:'knob'},{id:'summit-knob',x:19.4,y:5.72,kind:'knob'}],
+ objects:[{id:'practice-dummy',kind:'dummy',w:.65,h:1,x0:23,x1:23,y:6.15,speed:0,handles:[]}],
+ path:[[1,1],[7,1],[8.5,2.4],[12,2.4],[16,2.4],[17.6,3.8],[19,6.6],[26.5,6.6]],
+ signs:[],
+ // Reset stance drops the team back at the start of their current section.
+ stations:{meadow:{x:1.6,y:1.05},step:{x:7.6,y:2.45},shelf:{x:14.6,y:2.45},summit:{x:19.2,y:6.65}},
+ zones:[
+  {id:'meadow',x0:-1,x1:7,y0:-1,y1:4},{id:'step',x0:7,x1:10,y0:1.2,y1:5},{id:'trench',x0:10,x1:14,y0:-2,y1:-.6},
+  {id:'shelf',x0:14,x1:18,y0:1.2,y1:5},{id:'wall',x0:17,x1:18.2,y0:2.6,y1:5.6},{id:'summit',x0:18,x1:29,y0:5.4,y1:13}]
 });
 const races=require('./race-courses.cjs');
 const forest=prepareCourse(races.forest),campus=prepareCourse(races.campus);

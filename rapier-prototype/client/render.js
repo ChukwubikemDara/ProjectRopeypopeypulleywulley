@@ -45,9 +45,9 @@ function build(L){
  if(level&&level.revision===L.revision&&level.id===L.id)return;if(level)clearLevel();level=L;
  const palettes={snow:['#b9d9e5','#c2dae3','#8d99a4','#f4f3e9','#bb9271','#ffe0b5','#c3e6ff','#837078'],forest:['#b5cec2','#b5cec2','#9b805e','#9cba7b','#a68a64','#fff0c6','#d3e8d3','#6f806a'],campus:['#c8dce5','#c8dce5','#d8c4a4','#a8bc87','#d9c39f','#ffe4bd','#dce9f1','#938a82']};
  const palette=palettes[L.biome]||palettes.snow;scene.background.set(palette[0]);scene.fog.color.set(palette[1]);rock.color.set(palette[2]);snow.color.set(palette[3]);wood.color.set(palette[4]);sun.color.set(palette[5]);hemisphere.color.set(palette[6]);hemisphere.groundColor.set(palette[7]);
- document.querySelector('.lab-title span')?.replaceChildren(document.createTextNode(L.kind==='practice'?'TETHERED / BASE CAMP':'TETHERED / '+({forest:'FOREST',campus:'OLD MAIN'}[L.biome]||'SNOWBOUND')));
- document.querySelector('.lab-title h1')?.replaceChildren(document.createTextNode(L.kind==='practice'?'A little coordination.':({forest:'Branch management.',campus:'Old Main. New heights.'}[L.biome]||'The long way through.')));
- document.querySelector('.lab-title p')?.replaceChildren(document.createTextNode(L.kind==='practice'?'Practice together. Start the race whenever you are ready.':'Two phones. One climber. Make it to the flag.'));
+ document.querySelector('.lab-title span')?.replaceChildren(document.createTextNode(L.kind==='practice'?'TETHERED / PROLOGUE':'TETHERED / '+({forest:'FOREST',campus:'OLD MAIN'}[L.biome]||'SNOWBOUND')));
+ document.querySelector('.lab-title h1')?.replaceChildren(document.createTextNode(L.kind==='practice'?'The foot of the mountain.':({forest:'Branch management.',campus:'Old Main. New heights.'}[L.biome]||'The long way through.')));
+ document.querySelector('.lab-title p')?.replaceChildren(document.createTextNode(L.kind==='practice'?'Two of you. One body. Listen to the narrator.':'Two phones. One climber. Make it to the flag.'));
  for(const t of L.terrain.filter(t=>L.biome==='snow'||t.kind!=='boundary'))prism(t.pts,L.depth,t.kind==='pipe'?metal:t.kind==='crate'?rust:t.kind==='ridge'||t.kind==='roof'?dark:t.kind==='bark'?wood:t.kind==='grass'||t.kind==='moss'?snow:rock);
  if(L.pipe){
  const P=L.pipe,R=P.gap/2+P.slab/2,angle=Math.atan2(P.dir[1],P.dir[0]);

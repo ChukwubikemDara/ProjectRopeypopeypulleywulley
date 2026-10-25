@@ -4,6 +4,8 @@ const QR=require('qrcode');
 const {Simulation}=require('./physics.cjs');
 const Courses=require('./courses.cjs');
 const {Tutorial}=require('./tutorial.cjs');
+// Reset in the prologue puts a team back at the start of the section they're in (the trench counts as the step before it).
+const sectionStart=(c,course)=>{const x=c.body.translation().x,stations=Object.values(course.stations||{}).sort((a,b)=>a.x-b.x);return stations.filter(s=>s.x<=x+.5).at(-1)||stations[0];};
 const {TUNABLE}=require('./main-config.cjs');
 async function createServer({courses=Courses.all}={}){
  let sim=await Simulation.create(courses.find(c=>c.kind==='race'));const tutorial=new Tutorial();let revision=1,selected=sim.course.id,host=null,mode='race';
@@ -66,7 +68,7 @@ async function createServer({courses=Courses.all}={}){
    s.on('practice',()=>{if(s.id===host||phase==='lobby'&&players.has(s.id))start({practice:true});});
    s.on('retryRace',()=>{if(s.id===host)start({retry:true});});
    s.on('selectCourse',(id,ack)=>{let error=null;const target=courses.find(c=>c.id===id&&c.kind==='race');if(s.id!==host)error='Only the host can choose a course';else if(phase==='playing')error='End the round before changing maps';else if(!target)error='That course is not available yet';else{selected=id;phase='lobby';loadCourse(id);io.emit('phase',phase);}if(typeof ack==='function')ack({ok:!error,error});});
-   s.on('practiceReset',()=>{const p=players.get(s.id),c=p&&sim.climbers.get(p.team);if(mode!=='practice'||phase!=='playing'||!c||Date.now()-(p.lastPracticeReset||0)<1000)return;p.lastPracticeReset=Date.now();sim.practiceStation(c,tutorial.snapshot(c,sim.time).step);});
+   s.on('practiceReset',()=>{const p=players.get(s.id),c=p&&sim.climbers.get(p.team);if(mode!=='practice'||phase!=='playing'||!c||Date.now()-(p.lastPracticeReset||0)<1000)return;p.lastPracticeReset=Date.now();sim.practiceStation(c,sectionStart(c,sim.course));});
    s.on('endRound',()=>{if(s.id===host)endRound();});
    s.on('addBot',()=>{if(mode==='practice'||teams.size>=12)return;const t=newTeam();t.bot=true;t.name='Bot '+serial;const c=sim.spawn(t.id);c.bot=true;publish();});
    s.on('clearBots',()=>{for(const [id,t]of teams)if(t.bot){teams.delete(id);sim.remove(id);}publish();});

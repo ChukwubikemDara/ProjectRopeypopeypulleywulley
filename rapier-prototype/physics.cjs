@@ -315,7 +315,7 @@ class Simulation {
   }
   practiceStation(c,stage){
     if(this.course.kind!=='practice')return false;
-    const point=this.course.stations[stage]||this.course.stations.aim;
+    const point=typeof stage==='object'&&stage?stage:this.course.stations[stage]||Object.values(this.course.stations)[0];
     delete c.tutorialTakeoff;const closed=[c.arms.l,c.arms.r];c.safeSpawn=V(point.x,point.y,0);this.recover(c);for(const h of c.hands)h.noGripUntil=0;[c.arms.l,c.arms.r]=closed;c.lastJump=c.lastPush=c.lastLetGo=-10;c.stamina=100;
     // Closed pads still have to catch real holds; the station never awards a grip or combo.
     return true;
@@ -329,7 +329,7 @@ class Simulation {
     });
     const ground=this.grounded(c);
     const legs=c.feet.map(f=>{const foot=f.body.translation(),hip=add(p,rotate(V(f.side*this.config.hipX,-this.config.hipY,0),q));const knee=add(mul(add(hip,foot),.5),V(f.side*.05,.02,.14));return{kx:knee.x,ky:knee.y,kz:knee.z,fx:foot.x,fy:foot.y,fz:foot.z,planted:!!this.footSupport(f)};});
-    return {id:c.id,...p,assist:c.assist,grounded:ground,rotation:q,velocity:vel,angular:c.body.angvel(),stamina:c.stamina,actions:{jump:this.jumpState(c,ground),kick:{cooldown:Math.max(0,this.config.kickCooldown-(this.time-(c.lastKick??-10)))}},carry:c.carry,stats:{...c.stats},lastAction:c.lastGestureResult,braced:c.braced,air:!ground&&!hands.some(h=>h.grip),hands,legs,gripping:hands.some(h=>h.grip),progress:progressAt(p.x,p.y,this.course),finished:this.course.kind!=='practice'&&p.x>=this.course.finish.zoneX&&p.y>=this.course.finish.y-.3};
+    return {id:c.id,...p,assist:c.assist,grounded:ground,rotation:q,velocity:vel,angular:c.body.angvel(),stamina:c.stamina,actions:{jump:this.jumpState(c,ground),kick:{cooldown:Math.max(0,this.config.kickCooldown-(this.time-(c.lastKick??-10)))}},carry:c.carry,stats:{...c.stats},lastAction:c.lastGestureResult,braced:c.braced,air:!ground&&!hands.some(h=>h.grip),hands,legs,gripping:hands.some(h=>h.grip),progress:progressAt(p.x,p.y,this.course),finished:p.x>=this.course.finish.zoneX&&p.y>=this.course.finish.y-.3};
   }
   free(){for(const id of [...this.climbers.keys()])this.remove(id);this.contactEvents.free();this.world.free();}
 }
