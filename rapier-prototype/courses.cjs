@@ -16,10 +16,10 @@ function validateCourse(c){
  for(let i=0;i<c.path.length;i++){const p=c.path[i];if(!p.every(finite)||p.length!==2||i&&Math.hypot(p[0]-c.path[i-1][0],p[1]-c.path[i-1][1])===0)throw Error('Invalid racing path');}
  const ids=new Set();for(const h of c.holds){if(ids.has(h.id)||![h.x,h.y,h.z].every(finite))throw Error('Invalid or duplicate hold');ids.add(h.id);}
  for(const o of c.objects)if(![o.x0,o.x1,o.y,o.w,o.h,o.speed].every(finite)||o.x1<o.x0||o.w<=0||o.h<=0)throw Error('Invalid course object');
- if(c.routes?.shortcut){const r=c.routes.shortcut;if(!r.id||r.path?.length<2||!r.holdIds?.length||r.holdIds.some(id=>!ids.has(id)))throw Error('Shortcut needs a path and existing holds');}
+ if(c.routes?.shortcut){const r=c.routes.shortcut;if(!r.id||r.path?.length<2||!Array.isArray(r.holdIds)||r.holdIds.some(id=>!ids.has(id)))throw Error('Shortcut needs a path, and its holds (if any) must exist');}
  return c;
 }
-const mountain=prepareCourse({...source,id:'mountain',biome:'snow',kind:'race',name:'Snowbound · The Long Way Up',source:'main 8f94284 / complete course',routes:{shortcut:{id:'pipe-roof',name:'Over the pipe',holdIds:source.holds.filter(h=>h.kind==='knob'&&h.x<20).map(h=>h.id),path:[[4,1],[7,5],[20,11],[25,9.2]]}}});
+const mountain=prepareCourse({...source,id:'mountain',biome:'snow',kind:'race',name:'Snowbound · The Long Way Up',source:'main 8f94284 / complete course',routes:{shortcut:{id:'pipe-roof',name:'Over the pipe',holdIds:[],path:[[4,1],[7,5],[20,11],[25,9.2]]}}});
 // The prologue: a short narrated climb that teaches by doing. Each section needs the move it introduces;
 // falling only ever drops you back a section, never to the start.
 // The prologue, built around the script. Two mirrored lanes (left team, right team) climb toward a

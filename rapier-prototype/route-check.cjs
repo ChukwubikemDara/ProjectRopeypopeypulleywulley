@@ -11,9 +11,10 @@ const {Simulation,course}=require('./physics.cjs');
   assert.ok(Math.abs(c.body.translation().z)<1e-5,'Tilt or impulses must not move the body into depth lanes');
   assert.ok(c.hands.every(h=>Math.abs(h.body.translation().z)<1e-5),'Hands stay centered');
   console.log('PASS centered travel ignores depth input and impulses');
-  const P=course.pipe,knob=course.holds.find(h=>h.kind==='knob');
-  const inside={x:knob.x-P.normal[0]*1.3,y:knob.y-P.normal[1]*1.3,z:0};
-  assert.equal(sim.visibleHold(inside,knob),false,'A roof hold must not be targeted through solid pipe');
+  // a hold inside the pipe must not be targeted from on top of its roof
+  const P=course.pipe,knob=course.holds.find(h=>h.prop==='mitten');
+  const inside={x:knob.x+P.normal[0]*1.3,y:knob.y+P.normal[1]*1.3,z:0};
+  assert.equal(sim.visibleHold(inside,knob),false,'A hold inside the pipe must not be targeted through its roof');
   console.log('PASS holds behind solid terrain cannot be targeted');
   // Test genuine acquisition through targeting/forces, not a direct grab helper.
   const hold=course.holds.find(h=>h.kind==='handle'&&h.x>9);
