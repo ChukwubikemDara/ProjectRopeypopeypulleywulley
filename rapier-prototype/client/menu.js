@@ -3,7 +3,7 @@
  const $=id=>document.getElementById(id),make=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text)e.textContent=text;return e;};
  const menu=make('section','main-menu');menu.setAttribute('aria-label','Main menu');
  const eyebrow=make('p','menu-eyebrow','A little trust. A long way up.');
- const logo=make('h1','menu-logo','TETHERED'),tag=make('p','menu-tag','Two phones. One body. Zero trust.');
+ const logo=make('h1','menu-logo','TWO LEFT LEGS'),tag=make('p','menu-tag','Two phones. One body. Zero trust.');
  const prologue=make('button','menu-button prologue');prologue.type='button';prologue.append(make('b',null,'PROLOGUE'),make('small',null,'Two people required · learn to climb together'));
  const race=make('button','menu-button race');race.type='button';race.append(make('b',null,'RACE'),make('small','menu-race-map',''));
  const maps=make('div','menu-maps');maps.setAttribute('role','radiogroup');maps.setAttribute('aria-label','Race map');
@@ -22,7 +22,7 @@
    b.onclick=()=>Net.socket.emit('selectCourse',c.id,r=>{if(!r?.ok)note.textContent=r?.error||'Could not pick that map.';});return b;}));}
   for(const b of maps.children){const selected=b.dataset.course===s.selected;b.classList.toggle('on',selected);b.setAttribute('aria-checked',String(selected));b.disabled=!host();}
   const course=s.catalog.find(c=>c.id===s.selected),biome=course?.biome||'snow';document.body.dataset.biome=biome;
-  document.title='Tethered · '+(course?.name.split(' · ')[0]||'Join the climb');
+  document.title='Two Left Legs · '+(course?.name.split(' · ')[0]||'Join the climb');
   race.querySelector('.menu-race-map').textContent=(course?.name.split(' · ').slice(1).join(' · ')||'Climb together')+' · first to the flag';
   sceneLabel.textContent={snow:'SNOWBOUND / Fresh powder. Questionable teamwork.',forest:'FOREST / Take the scenic root.',campus:'OLD MAIN / Office hours: uphill.'}[biome]||'';
   prologue.disabled=race.disabled=!host();

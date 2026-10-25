@@ -1,4 +1,4 @@
-# Tethered — three 3D race courses
+# Two Left Legs — three 3D race courses
 
 The complete course and gameplay rules from main `8f94284` are adapted to server-side Rapier 3D and the Snowbound presentation. Travel stays centered, with 3D body rotation and swinging. This is the full race, not the earlier pipe-to-ledge slice. The original Planck server remains available as a fallback.
 

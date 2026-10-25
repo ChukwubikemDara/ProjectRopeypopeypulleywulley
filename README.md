@@ -1,4 +1,6 @@
-# Tethered
+# Two Left Legs
+
+(Previously called Tethered.)
 
 Four friends, eight hands, zero trust. A Foddian rage-climber for HackPSU's Mystery Stack
 (phone motion · rivalry · 4+ players). Every phone is both the controller and the screen.
