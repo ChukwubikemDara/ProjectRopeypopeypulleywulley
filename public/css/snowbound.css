@@ -1,0 +1,74 @@
+/* Snowbound presentation layer. Keep control-state classes in style.css intact. */
+:root { --bg:#edf4f8; --panel:rgba(255,253,249,.96); --card:rgba(221,233,241,.52); --ink:#192940; --dim:#53677c; --rope:#56788d; --hot:#c34248; --gold:#ef8579; --ok:#258779; --shadow:0 12px 36px #203a5514; }
+html,body { font-family:ui-rounded,'SF Pro Rounded',system-ui,sans-serif; }
+button,input { transition:background .18s,transform .18s,box-shadow .18s; }
+button:focus-visible,input:focus-visible { outline:3px solid #267caa; outline-offset:4px; }
+.logo { background:none; color:var(--ink); letter-spacing:-2px; font-size:clamp(38px,11vw,58px); }
+.tag { color:var(--dim); font-size:13px; line-height:1.5; letter-spacing:.1px; }
+.edition { font-size:11px; font-weight:850; letter-spacing:2px; color:#416e8b; }
+.brand .edition { margin-bottom:18px; }
+.panel { background:linear-gradient(160deg,#f9fbfcf5,#eef5f9f7); gap:16px; padding-inline:max(24px,calc((100vw - 440px)/2)); animation:arrive .35s ease-out; touch-action:pan-y; }
+#join { background:radial-gradient(ellipse at 85% 20%,#fff9 0,transparent 45%),linear-gradient(155deg,#e1eef4ed,#faf8f2f5); }
+#join::before { content:'▲'; font-size:110px; color:#86b9d2; line-height:1; margin-bottom:20px; text-shadow:30px 10px 0 #c3dce7; }
+#join .brand { margin-bottom:12px; }
+.name-label { display:block; color:var(--ink); font-size:13px; }
+input#name { background:#fffdfb; border:2px solid #d4e1e9; border-radius:20px; font-size:18px; padding:18px; }
+input#name:focus { border-color:#79b9ce; box-shadow:0 0 0 4px #83bfd325; }
+button.big { background:#f18b7f; color:#35252b; box-shadow:0 5px 0 #d77268; border-radius:20px; font-size:18px; padding:18px; }
+button.big:active { box-shadow:0 2px 0 #d77268; }
+button.ghost { background:#e6eef2; color:#3e596d; border-radius:15px; }
+.card { border-radius:22px; padding:18px; border:1px solid #dce7ed; }
+.pill { font-size:10px; color:#fff; }
+.pill.team { color:#192940; }
+.aimpad { background:#f7fafb; border-color:#d5e3ec; }
+.aimpad::before,.aimpad::after { background:#d5e3ec; }
+#aimDot { background:#ef8579; box-shadow:0 3px 10px #c8736740; }
+.member.me { color:#226d79; }
+li.team-row.mine { background:#d9eae9; }
+button.join { color:#35252b; }
+#hud .top { flex-wrap:wrap; left:16px; right:auto; width:min(320px,calc(100vw - 72px)); padding:14px 16px; gap:8px 12px; background:var(--panel); border-radius:24px; box-shadow:var(--shadow); }
+.climb-identity { flex:1; min-width:120px; display:flex; flex-direction:column; gap:4px; }
+#hudName { font-size:12px; font-weight:900; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+#hudRole { font-size:9px; font-weight:750; letter-spacing:1px; color:var(--dim); }
+.height { font-size:29px; text-shadow:none; min-width:45px; }.height small { color:var(--ink); }
+.stamina-wrap { flex:1; min-width:65%; }.stamina-wrap small { display:block; font-size:8px; letter-spacing:1px; font-weight:800; margin-bottom:5px; color:var(--dim); }
+.stamina { height:8px; border:0; background:#dce3e9; }#stamina { background:#39b5a6; }
+#hudSteady { padding:5px 7px; }
+#hint { top:calc(env(safe-area-inset-top) + 142px); font-size:12px; padding:12px; color:var(--ink); background:var(--panel); box-shadow:var(--shadow); }
+#hud .bottom { gap:14px; left:16px; right:16px; }
+.pad { height:142px; max-width:190px; border:2px solid #fff; border-radius:30px; background:#fffdf9f2; color:var(--ink); box-shadow:var(--shadow); font-size:10px; gap:6px; }
+.pad.right { margin-left:auto; }.pad svg { width:54px; height:54px; }
+.pad svg path,.pad svg rect { fill:#9daebc; stroke:none; }.pad svg .line { stroke:#fff; }
+.pad::after { content:'OPEN'; font-size:9px; letter-spacing:1px; background:#e4e9ed; color:#4b6277; padding:4px 12px; border-radius:20px; font-weight:850; }
+.pad.closed { color:var(--ink); background:#eaf2f6; border-color:#9ec7d7; transform:scale(.97); }.pad.closed::after { content:'CLOSED'; }
+.pad.grip { background:#f8fffc; border-color:#49b5a7; color:var(--ink); }.pad.grip svg path,.pad.grip svg rect { fill:#36b9aa; }.pad.grip::after { content:'HOLDING'; background:#268679; color:white; }
+.pad.friend { background:#fff7ec; border-color:#dc9c51; color:var(--ink); }.pad.friend::after { content:'TEAMMATE'; background:#986322; color:white; }
+.foot { background-color:#fffdf9ed; border:2px solid white; color:var(--ink); box-shadow:var(--shadow); }.foot.planted { background-color:#d9f2e9; color:#195b51; }
+.pushbox { background:#fffdf9ed; border:2px solid #f2aa97; }.pushbox b { color:#9c4c40; }.pushbox .fine { font-size:10px; }.pushbox.fire b { color:#35252b; }
+.gear { background:#fffdf9ee; color:#3c576a; box-shadow:var(--shadow); }
+#debug,#tune { border:1px solid #d6e4eb; box-shadow:var(--shadow); }
+#raceRail { position:absolute; right:18px; top:calc(env(safe-area-inset-top) + 140px); bottom:calc(env(safe-area-inset-bottom) + 190px); width:5px; border-radius:10px; background:#fffaf2cf; }
+#raceRail::before { content:'⚑'; position:absolute; top:-24px; left:-6px; color:#21344a; font-size:21px; }
+.race-dot { position:absolute; left:50%; width:15px; height:15px; border:3px solid #fff; border-radius:50%; transform:translate(-50%,50%); background:var(--team); box-shadow:0 2px 6px #1233; transition:bottom .2s linear; }
+.race-dot.mine { width:20px; height:20px; outline:2px solid #20334a; }
+.winner { color:#267e77; line-height:1.4; }#awards li { padding:18px; }
+body.screen #side { width:300px; border:1px solid #fff8; box-shadow:var(--shadow); border-radius:28px; overflow-y:auto; gap:16px; }
+body.screen .logo { font-size:38px; }.screen #qrBox { border-radius:20px; }.screen #qrBox img { max-height:200px; }
+#raceHeader { position:fixed; z-index:5; top:20px; left:calc(50% + 150px); transform:translateX(-50%); background:var(--panel); box-shadow:var(--shadow); padding:14px 22px; border-radius:22px; display:flex; align-items:center; gap:20px; white-space:nowrap; }
+#raceHeader b { font-size:15px; }#raceClock { font-size:12px; font-variant-numeric:tabular-nums; color:var(--dim); }
+#raceStandings { display:none; }
+body.screen.playing #raceHeader { left:50%; }
+body.screen.playing #side { top:auto; bottom:18px; max-height:180px; width:240px; padding:16px; gap:10px; }
+body.screen.playing #side > .logo { font-size:24px; }
+body.screen.playing #side > .tag,body.screen.playing #side > p,body.screen.playing #side > .card,body.screen.playing #side > .row { display:none; }
+body.screen.playing #feed div:nth-child(n+3) { display:none; }
+body.screen.playing #raceStandings { position:fixed; display:flex; z-index:5; top:88px; left:20px; right:20px; gap:10px; flex-wrap:wrap; pointer-events:none; }
+.standing { background:var(--panel); padding:10px 14px; min-width:135px; border-radius:20px; box-shadow:var(--shadow); border-left:5px solid var(--team); display:grid; grid-template-columns:1fr auto; gap:5px 14px; }
+.standing b { max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:12px; }.standing strong { font-size:16px; }.standing small { grid-column:1/-1; color:var(--dim); font-size:9px; }
+body.screen #banners { padding-left:0; padding-top:19vh; }.banner { font-size:clamp(18px,3vw,30px); background:#fffdf9f5; border-radius:18px; padding:12px 22px; -webkit-text-stroke:0; text-shadow:none; box-shadow:var(--shadow); max-width:85vw; }
+#banners { padding-top:40vh; gap:8px; }#banners .banner:nth-last-child(n+2) { display:none; }
+#danger { font-size:24px; text-shadow:0 2px 6px #183344; }#comboFlash { font-size:42px; }
+@keyframes arrive { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+@media(min-width:700px) { body.phone .panel { padding-inline:max(28px,calc((100vw - 440px)/2)); }body.phone #hud .bottom { max-width:460px; left:50%; right:auto; width:calc(100% - 32px); transform:translateX(-50%); } }
+@media(max-width:650px) { #raceHeader { left:auto; right:12px; transform:none; padding:12px; }#raceHeader .edition { display:none; }body.screen #side { width:230px; }body.screen.playing #raceHeader { left:50%; right:auto; transform:translateX(-50%); }body.screen #results { width:calc(100vw - 32px); }.pad { height:130px; } }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation-duration:.01ms!important; transition-duration:.01ms!important; } }

@@ -5,7 +5,11 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test/sim.js"
+    "test": "node test/sim.js",
+    "lab:3d": "node rapier-prototype/server.cjs",
+    "lab:3d:check": "node rapier-prototype/smoke.cjs",
+    "start:3d": "node rapier-prototype/server.cjs",
+    "test:3d": "node rapier-prototype/smoke.cjs"
   },
   "keywords": [],
   "author": "",

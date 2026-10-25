@@ -5,13 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tethered — Spectator</title>
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/snowbound.css">
 </head>
 <body class="screen">
 <div id="game"></div>
+<header id="raceHeader"><span class="edition">▲ SNOWBOUND</span><b>Race to the summit</b><span id="raceClock">0:00</span></header>
+<div id="raceStandings" aria-label="Race standings"></div>
 
 <aside id="side">
   <div class="logo">TETHERED</div>
-  <div class="tag">four friends · eight hands · zero trust</div>
+  <div class="tag">A little teamwork. A little betrayal.</div><p class="fine">Scan to join. Pair up: one climber, two phones.</p>
   <div id="qrBox">
     <img id="qr" alt="Join QR code">
     <div class="fine center" id="joinUrl"></div>
@@ -21,7 +24,7 @@
     <ul id="players"></ul>
   </div>
   <div class="row gap">
-    <button id="startBtn" class="big">Start round</button>
+    <button id="startBtn" class="big">Let’s climb</button>
   </div>
   <div class="row gap">
     <button id="botBtn" class="ghost">+ Bot</button>
@@ -109,6 +112,7 @@
 })();
 </script>
 <script type="importmap">{ "imports": { "three": "/lib/three/three.module.min.js", "three/addons/": "/lib/three/addons/" } }</script>
+<script src="/js/presentation.js"></script>
 <script type="module" src="/js/render3d.js"></script>
 </body>
 </html>

@@ -7,10 +7,11 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Tethered">
-<meta name="theme-color" content="#0e1020">
+<meta name="theme-color" content="#edf4f8">
 <link rel="manifest" href="/manifest.json">
 <title>Tethered</title>
 <link rel="stylesheet" href="/css/style.css">
+<link rel="stylesheet" href="/css/snowbound.css">
 </head>
 <body class="phone">
 <div id="game"></div>
@@ -18,11 +19,13 @@
 <!-- join -->
 <section id="join" class="panel">
   <div class="brand">
+    <div class="edition">▲ SNOWBOUND · PARTY CLIMBING</div>
     <div class="logo">TETHERED</div>
     <div class="tag">four friends · eight hands · zero trust</div>
   </div>
+  <label class="name-label" for="name">What should we call you?</label>
   <input id="name" maxlength="14" placeholder="Your name" autocomplete="off" autocapitalize="words">
-  <button id="joinBtn" class="big">Join</button>
+  <button id="joinBtn" class="big">Join the climb</button>
   <p class="fine" id="joinNote">Tip: Share → Add to Home Screen for full screen.</p>
 </section>
 
@@ -46,17 +49,19 @@
     <ul id="players"></ul>
   </div>
   <p class="fine center" id="waitNote"></p>
-  <button id="startBtn" class="big">Start round</button>
+  <button id="startBtn" class="big">Let’s climb</button>
   <button id="botBtn" class="ghost">+ Add a bot (for testing)</button>
 </section>
 
 <!-- in-game HUD -->
 <section id="hud" class="hidden">
   <div class="top">
+    <div class="climb-identity"><span id="hudName">YOUR CLIMBER</span><span id="hudRole">ARMS + LEGS</span></div>
     <div class="height"><span id="height">0</span><small>m</small></div>
-    <div class="stamina"><div id="stamina"></div></div>
+    <div class="stamina-wrap"><small>ENERGY</small><div class="stamina" role="progressbar" aria-label="Energy" aria-valuemin="0" aria-valuemax="100"><div id="stamina"></div></div></div>
     <span id="hudSteady" class="pill">STEADY</span>
   </div>
+  <div id="raceRail" aria-label="Race progress"></div>
   <div id="hint"></div>
   <div id="comboFlash">COMBO!</div>
   <div id="danger"><span>HOLD STILL!</span></div>
@@ -96,6 +101,7 @@
 <script src="/js/sound.js"></script>
 <script src="/js/phone.js"></script>
 <script type="importmap">{ "imports": { "three": "/lib/three/three.module.min.js", "three/addons/": "/lib/three/addons/" } }</script>
+<script src="/js/presentation.js"></script>
 <script type="module" src="/js/render3d.js"></script>
 </body>
 </html>
