@@ -26,10 +26,11 @@ const terrain = [
   { kind: 'pipe', pts: slab(0, len - 1.2, PIPE_GAP, PIPE_GAP + SLAB), friction: 0.15 }, // pipe ceiling: its outside top is the slippery SHORTCUT
   { kind: 'rock', pts: [[LEDGE.x0, -3], [LEDGE.x1, -3], [LEDGE.x1, LEDGE.y], [LEDGE.x0, LEDGE.y]] }, // checkpoint ledge
   { kind: 'rock', pts: [[TOP.x0, -3], [TOP.x1, -3], [TOP.x1, TOP.y], [TOP.x0, TOP.y]] },             // THE WALL + top ledge
-  // the overhang the ladder hangs from, on a tall post standing on the checkpoint ledge. It stops short of THE WALL,
-  // so the twig combo has open sky above it; from the top of the overhang you hop across onto the top ledge.
+  // the overhang the ladder hangs from. It stops short of THE WALL, so the twig combo has open sky above it; from the
+  // top of the overhang you hop across onto the top ledge. Its post hangs down but stops 2.6 m above the checkpoint
+  // ledge, so you can walk underneath it from the pipe to the twig wall.
   { kind: 'beam', pts: [[23.6, 16.3], [25.8, 16.3], [25.8, 16.7], [23.6, 16.7]] },
-  { kind: 'beam', pts: [[25.4, LEDGE.y], [25.8, LEDGE.y], [25.8, 16.3], [25.4, 16.3]] },
+  { kind: 'beam', icicles: true, pts: [[25.4, LEDGE.y + 2.6], [25.8, LEDGE.y + 2.6], [25.8, 16.3], [25.4, 16.3]] }, // icicles hang off its end
   { kind: 'rock', pts: [[-4, -3], [-1, -3], [-1, 30], [-4, 30]] },                    // left edge of the world
   { kind: 'rock', pts: [[51, -3], [54, -3], [54, 30], [51, 30]] },                    // right edge
   { kind: 'rock', pts: [[FINISH_DECK.x0, TOP.y], [FINISH_DECK.x1, TOP.y], [FINISH_DECK.x1, FINISH_DECK.y], [FINISH_DECK.x0, FINISH_DECK.y]] }, // the finish deck
@@ -45,7 +46,7 @@ const hold = (x, y, kind, extra) => holds.push({ id: holds.length, x: +x.toFixed
 // inside the pipe: a few things that got stuck to the ceiling, unevenly spaced and at slightly different
 // heights. Far enough apart that swinging between them is a commitment; the floor is always there instead.
 // [distance along the pipe, height above its floor, what it is]. The frying pan hangs over the crate.
-for (const [s, off, prop] of [[2.4, 2.25, 'mitten'], [5.3, 2.35, 'plunger'], [7.9, 2.2, 'duck'], [9.9, 2.3, 'pan'], [12.9, 2.25, 'fish'], [16.1, 2.35, 'umbrella']]) {
+for (const [s, off, prop] of [[2.4, 2.25, 'mitten'], [5.3, 2.35, 'plunger'], [7.9, 2.2, 'duck'], [9.9, 2.3, 'pan'], [13.5, 2.25, 'fish'], [16.1, 2.35, 'umbrella']]) {
   const [x, y] = at(s, off); hold(x, y, 'handle', { prop, roof: +(PIPE_GAP - off).toFixed(2) }); // roof: how far up the pipe roof is
 }
 // SHORTCUT: the bare, slippery top of the pipe. Nothing to hold on to up there, on purpose.
@@ -73,7 +74,7 @@ const path = [[1, 1], [5, 1], at(len, 1.2), [LEDGE.x1 - 0.6, LEDGE.y + 1.2], [TO
 
 const signs = [
   { x: 3.2, y: 4.6, text: 'SHORTCUT ↗', sub: 'slippery · no ceiling to catch you' },
-  { x: 24.8, y: 9.9, text: 'CHECKPOINT', sub: 'fall off the wall, land here' },
+  { x: 23.4, y: 9.55, text: 'CHECKPOINT', sub: 'fall off the wall, land here' },
   { x: 32.5, y: 11.4, text: 'TEAMWORK', sub: 'hang on the twig · legs HOP + arms LET GO' },
 ];
 

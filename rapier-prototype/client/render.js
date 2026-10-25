@@ -55,6 +55,9 @@ function build(L){
  document.querySelector('.lab-title p')?.replaceChildren(document.createTextNode(L.kind==='practice'?'Two of you. One body. Listen to the narrator.':'Two phones. One climber. Make it to the flag.'));
  for(const t of L.terrain.filter(t=>L.biome==='snow'||t.kind!=='boundary'))prism(t.pts,L.depth,t.kind==='pipe'?metal:t.kind==='crate'?rust:t.kind==='roof'&&L.biome==='campus'?[rock,dark]:t.kind==='ridge'||t.kind==='roof'?dark:t.kind==='bark'?wood:t.kind==='grass'||t.kind==='moss'?snow:rock);
  // One extrusion per roof: cream front/back faces and dark edge faces, without coplanar skins.
+ // terrain that hangs in mid-air (the overhang's post) gets a fringe of icicles, so its end looks deliberate
+ {const ice=mat('#d8eef5');for(const t of L.terrain.filter(t=>t.icicles)){const xs=t.pts.map(p=>p[0]),bottom=Math.min(...t.pts.map(p=>p[1])),x0=Math.min(...xs),w=Math.max(...xs)-x0;
+  for(const [f,z,len,r]of [[.15,-.9,.32,.12],[.5,.3,.4,.15],[.85,-.2,.28,.1],[.3,1.0,.24,.09],[.7,-1.4,.3,.11]]){const cone=mesh(new THREE.ConeGeometry(r,len,8),ice,[x0+w*f,bottom-len/2,z]);cone.rotation.x=Math.PI;}}}
  if(L.pipe){
  const P=L.pipe,R=P.gap/2+P.slab/2,angle=Math.atan2(P.dir[1],P.dir[0]);
  // Open shell reveals the physical course. Its floor and roof match the source data.
@@ -195,7 +198,7 @@ function build(L){
    for(let i=0;i<L.path.length-1;i++){
     const [ax,ay]=L.path[i],[bx,by]=L.path[i+1],len=Math.hypot(bx-ax,by-ay),angle=Math.atan2(by-ay,(bx-ax)*lane);
     for(let d=carry;d<len;d+=4){
-     const x=(ax+(bx-ax)*d/len)*lane,y=ay+(by-ay)*d/len;if(solid(x,y))continue;
+     const x=(ax+(bx-ax)*d/len)*lane,y=ay+(by-ay)*d/len;if(solid(x,y)||L.holds.some(h=>!h.objectId&&Math.hypot(h.x-x,h.y-y)<.5))continue; // never on top of a hold
      const g=new THREE.Group();g.position.set(x,y,-.45);g.rotation.z=angle;g.scale.setScalar(1.15);
      const outline=new THREE.Mesh(back,edge);outline.position.z=-.01;const arrow=new THREE.Mesh(front,fill);g.add(outline,arrow);cueGroup.add(g);
      cues.push({mesh:g,kind:'arrow',x,y,dx:Math.cos(angle),dy:Math.sin(angle),phase:(x+y)*.4});
