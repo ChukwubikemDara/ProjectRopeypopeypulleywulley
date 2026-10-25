@@ -64,6 +64,7 @@ hold(23.1, 16.5, 'handle', { prop: 'ski' });
 const BUS = { w: 2.6, h: 3.6 }; // taller than any hop, even a lucky one
 const objects = [
   { id: 'cart', kind: 'cart', look: 'bus', w: BUS.w, h: BUS.h, x0: 31, x1: +(FINISH_DECK.x0 - 1 - BUS.w / 2).toFixed(2), y: TOP.y + BUS.h / 2 + 0.045, speed: 2.6,
+    fling: [5, 1], // a bus this tall shoves you back; it doesn't launch you up (onto its own roof)
     handles: [[-BUS.w / 2 - 0.05, BUS.h / 2 + 0.15], [BUS.w / 2 + 0.05, BUS.h / 2 + 0.15]] }, // rails at the ends of the roof, reachable from beside the bus
 ];
 
