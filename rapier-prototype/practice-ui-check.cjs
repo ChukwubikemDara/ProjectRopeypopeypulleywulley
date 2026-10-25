@@ -13,6 +13,21 @@ function uiHarness(){
  h.created.find(n=>n.textContent==='Prologue · learn the climb').onclick();assert.equal(h.ctx.Net.calibrated,false);assert.equal(h.emitted.filter(e=>e.type==='start').length,0);
  h.created.find(n=>n.textContent==='Continue with touch controls').onclick();assert.equal(h.touch,true);assert.equal(h.ctx.Net.calibrated,true);assert.equal(h.emitted.filter(e=>e.type==='start').at(-1).args[0].practice,true);console.log('PASS sensor-free fallback preserves a pending practice request');
 
+ // Motion users keep the same explicit Kick action; touch users retain all three actions.
+ const controls=uiHarness();let nextFrame;controls.ctx.requestAnimationFrame=fn=>{nextFrame=fn;};
+ controls.node('pushText').parentElement=controls.ctx.document.getElementById('pushParent');
+ const climber={id:'c1',grounded:true,hands:[{},{}],legs:[{planted:true},{planted:true}],actions:{jump:{ready:true,cooldown:0},kick:{cooldown:0}}};
+ controls.ctx.Net.me='c1';controls.ctx.Net.role='legs';controls.ctx.Net.calibrated=true;let snapshot={phase:'playing',climbers:[climber]};controls.ctx.Net.sample=()=>snapshot;
+ controls.load('phone-controls.js');const find=id=>controls.created.find(n=>n.id===id),dock=find('actionDock'),kick=find('action-kick'),jump=find('action-flick'),tuck=find('action-yank');
+ assert.equal(dock.hidden,false);assert.equal(kick.disabled,false);assert.equal(jump.hidden,true);assert.equal(tuck.hidden,true);
+ controls.ctx.Net.role='both';nextFrame();assert.equal(dock.hidden,false);assert.equal(kick.disabled,false);
+ controls.ctx.Net.role='arms';nextFrame();assert.equal(dock.hidden,true);assert.equal(kick.disabled,true);
+ controls.ctx.Net.role='legs';controls.ctx.Net.calibrated=false;nextFrame();assert.equal(dock.hidden,true);
+ controls.ctx.Net.calibrated=true;climber.actions.kick.cooldown=1;nextFrame();assert.equal(kick.disabled,true);
+ climber.actions.kick.cooldown=0;controls.ctx.PhoneControls.setTouchMode(true);nextFrame();assert.equal(jump.hidden,false);assert.equal(tuck.hidden,false);assert.equal(dock.hidden,false);
+ snapshot={...snapshot,phase:'results'};nextFrame();assert.equal(dock.hidden,true);
+ console.log('PASS Kick is available for calibrated motion LEGS/solo, hidden for ARMS/lobby/results, with cooldown; touch retains Jump/Tuck');
+
  // narration: captions always; voice off by default on phones; recordings first, synthesized voice as fallback
  const quiet=uiHarness();quiet.load('narration.js');quiet.inbound('narrate',{id:'intro',text:'Two of you. One body.',audio:null,duration:3});
  const caption=quiet.created.find(n=>n.className==='narration-text');assert.equal(caption.textContent,'Two of you. One body.');console.log('PASS captions show without any speech support');

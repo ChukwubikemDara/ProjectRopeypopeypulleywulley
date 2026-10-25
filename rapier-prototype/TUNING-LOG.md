@@ -20,3 +20,10 @@ One entry per physics/control change: what changed, why, what was tested, and pl
 - **Fix 2:** every kick swings the real foot about 0.65 m forward for 0.25 s, toward the nearest rival, otherwise the way you're leaning or heading.
 - **Automated:** `sensor-check.cjs` shoves at 0, 30, 45, 60 and 80 degrees and adds sideways and drifting-hop cases. `kick-check.cjs` checks the leg swing on a miss.
 - **Real phones:** not retested yet.
+
+## 2026-10-25 · Kick button alongside motion
+
+- **Changed:** restored the Kick button for calibrated LEGS/solo players during motion play. Shove gesture remains enabled. Jump/Tuck remain touch-mode buttons; ARMS cannot kick.
+- **Why:** user explicitly requested both a discoverable button and the existing gesture. No physics tuning or prologue edits.
+- **Automated:** visibility across roles/calibration/phases/touch mode, cooldown, shared gesture lockout and socket kick physics pass.
+- **Browser:** verified motion-mode solo Kick remains visible and reports a real out-of-range result. Physical phone retesting remains pending.

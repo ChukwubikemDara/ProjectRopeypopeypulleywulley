@@ -19,7 +19,7 @@
  const heading=create('b',null,null,'Button controls');preferences.append(heading);
  function option(id,label,description){const row=create('label',null,'control-option'),copy=create('span'),title=create('b',null,null,label),help=create('small',null,null,description),input=create('input',id);input.type='checkbox';copy.append(title,help);row.append(copy,input);preferences.append(row);return input;}
  const attribute=(el,key,value)=>{if(el.getAttribute(key)!==String(value))el.setAttribute(key,String(value));};
- // Jump, tuck and kick are motion controls, so their buttons only exist in the no-sensor touch mode.
+ // Kick stays available alongside motion; Jump and Tuck buttons belong to touch mode.
  const touch=option('touchAiming','Use touch controls','No motion sensors? Drag to aim and tap Jump, Tuck and Kick.');
  settings.insertBefore(preferences,$('closeDebug'));
  const aimPanel=create('div','touchAim','touch-aim');
@@ -50,7 +50,8 @@
   const jump=c?.actions?.jump,kick=c?.actions?.kick,locked=PhoneInput.lockout>0;
   const courseGrip=c?.hands.some(h=>h.grip&&!h.onClimber),planted=c?.legs.some(l=>l.planted);
   document.body.classList.toggle('touch-controls',manual);document.body.classList.toggle('legs-role',legs);document.body.classList.toggle('arms-role',arms);
-  dock.hidden=!active||arms||!manual;aimPanel.hidden=!active||!manual;
+  dock.hidden=!active||arms;aimPanel.hidden=!active||!manual;
+  buttons.flick.button.hidden=buttons.yank.button.hidden=!manual;
   buttons.flick.button.disabled=!active||arms||locked||!jump?.ready;
   buttons.yank.button.disabled=buttons.kick.button.disabled=!active||arms||locked;
   if(kick?.cooldown>0)buttons.kick.button.disabled=true;
