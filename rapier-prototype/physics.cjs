@@ -14,6 +14,7 @@ const limit=(a,m)=>mul(a,Math.min(1,m/(len(a)||1)));
 const rotate=(v,q)=>add(v,mul(cross(V(q.x,q.y,q.z),add(cross(V(q.x,q.y,q.z),v),mul(v,q.w))),2));
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 function progressAt(x,y,definition=course){
+ if(definition.mirror)x=-Math.abs(x); // mirrored lanes share one racing line
  let total=0,best={d:Infinity,at:0};
  for(let i=0;i<definition.path.length-1;i++){
   const [ax,ay] =definition.path[i],[bx,by]=definition.path[i+1],L=Math.hypot(bx-ax,by-ay),t=clamp(((x-ax)*(bx-ax)+(y-ay)*(by-ay))/(L*L),0,1),d=Math.hypot(x-ax-(bx-ax)*t,y-ay-(by-ay)*t);
@@ -54,7 +55,9 @@ class Simulation {
     this.world.step();
   }
   spawn(id){
-    const body=this.world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(this.course.spawn.x0+(this.course.spawn.x1-this.course.spawn.x0)*((this.climbers.size%8)+.5)/8,this.course.spawn.y+1.05,0).enabledTranslations(true,true,false).setLinearDamping(.9).setAngularDamping(3).setCanSleep(false).setCcdEnabled(true));
+    // courses with several spawns (the prologue's two lanes) alternate teams between them
+    const spawns=this.course.spawns||[this.course.spawn],area=spawns[this.climbers.size%spawns.length],slot=Math.floor(this.climbers.size/spawns.length)%8;
+    const body=this.world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(area.x0+(area.x1-area.x0)*(slot+.5)/8,area.y+1.05,0).enabledTranslations(true,true,false).setLinearDamping(.9).setAngularDamping(3).setCanSleep(false).setCcdEnabled(true));
     const torso=this.world.createCollider(R.ColliderDesc.capsule(.22,.28).setMass(5).setFriction(.9).setCollisionGroups((2<<16)|19).setActiveHooks(R.ActiveHooks.FILTER_CONTACT_PAIRS),body);this.owners.set(torso.handle,id);
     const head=this.world.createCollider(R.ColliderDesc.ball(.22).setTranslation(0,.51,0).setMass(0).setCollisionGroups((2<<16)|19).setActiveHooks(R.ActiveHooks.FILTER_CONTACT_PAIRS),body);this.owners.set(head.handle,id);
     const c={id,body,collider:torso,stats:stats(),carry:0,braced:false,overSince:null,holdingSince:null,savedCounted:false,airPeak:null,arms:{aim:0,ay:.6,l:false,r:false,brace:true},legs:{aim:0,ay:.6,brace:true},assist:true,lastJump:-10,lastFoot:-10,lastPush:-10,lastLetGo:-10,lastCombo:-10,letGoHanging:false,pushHanging:false,pushUntil:0,pushSpeed:0,pushDir:V(0,1,0),stamina:100,lastGestureResult:'ready',tuck:0,hands:[],feet:[],peak:0,safeSpawn:V(body.translation().x,body.translation().y,0),recoveries:0};
@@ -267,7 +270,7 @@ class Simulation {
         const up=rotate(V(0,1,0),q),front=rotate(V(0,0,1),q);
         c.body.addTorque(sub(add(mul(cross(up,V(0,1,0)),24),mul(cross(front,normal),7)),mul(c.body.angvel(),3)),true);
       }
-      c.peak=Math.max(c.peak,p.x);{const vx=c.body.linvel().x;if(Math.abs(vx)>.5)c.heading=Math.sign(vx);}const supported=held>0||feetDown||this.below(c);if(!supported)c.airPeak=Math.max(c.airPeak??p.y,p.y);else{const fall=(c.airPeak??p.y)-p.y;if(fall>3){c.stats.biggestFall=Math.max(c.stats.biggestFall,fall);this.events.push({type:'fall',id:c.id,m:Math.round(fall)});}c.airPeak=null;}
+      c.peak=Math.max(c.peak,p.x);{const vx=c.body.linvel().x;if(Math.abs(vx)>.5)c.heading=Math.sign(vx);}const supported=held>0||feetDown||this.below(c);if(!supported)c.airPeak=Math.max(c.airPeak??p.y,p.y);else{const fall=(c.airPeak??p.y)-p.y;if(fall>(this.course.fallEvent??3)){c.stats.biggestFall=Math.max(c.stats.biggestFall,fall);this.events.push({type:'fall',id:c.id,m:Math.round(fall*10)/10,x:p.x,y:p.y});}c.airPeak=null;}
       const support=this.support(c);
       if(support&&Math.abs(velocity.y)<2&&!this.terrainColliders.some(t=>t.containsPoint(p)))c.safeSpawn=V(p.x,support.height+1.05,0);
     }

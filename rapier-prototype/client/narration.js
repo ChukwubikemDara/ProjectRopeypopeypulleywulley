@@ -29,7 +29,10 @@
  }
  function next(){
   if(playing||!queue.length)return;
-  const line=playing=queue.shift();caption.textContent=line.text;bar.hidden=false;bar.classList.add('show');
+  const line=playing=queue.shift();bar.hidden=false;bar.classList.add('show');
+  // a long speech is split into captions (one per line of the script), timed by their share of the words
+  const parts=line.text.split('\n'),words=parts.map(p=>p.split(/\s+/).length),total=words.reduce((a,b)=>a+b,0),span=(line.duration||3)*1000;
+  caption.textContent=parts[0];let offset=0;parts.forEach((part,i)=>{if(i)setTimeout(()=>{if(playing===line)caption.textContent=part;},offset);offset+=span*words[i]/total;});
   // the caption stays up at least as long as the server's pacing, longer if the recording runs over
   let minDone=false,soundDone=!voiced||document.visibilityState!=='visible';
   const maybeFinish=()=>{if(minDone&&soundDone&&playing===line)finish();};
@@ -44,5 +47,13 @@
  Net.on('level',clear);Net.on('disconnect',clear);
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')stopSound();});
  setInterval(()=>{const prologue=Net.level?.kind==='practice'&&Net.phase==='playing';document.body.classList.toggle('practice-mode',prologue);back.hidden=!phone||!prologue||!Net.calibrated;if(!prologue&&(queue.length||playing))clear();},250);
+ // Waking up in the prologue: each phone gets a big card saying which half of the body it is.
+ const card=make('div','role-card-flash');card.hidden=true;card.setAttribute('role','status');const cardRole=make('b'),cardHow=make('small');card.append(make('span',null,'YOU ARE THE'),cardRole,cardHow);
+ if(phone)document.body.append(card);let cardFor=null;
+ setInterval(()=>{if(!phone)return;const prologue=Net.level?.kind==='practice'&&Net.phase==='playing'&&Net.calibrated;
+  if(prologue&&cardFor!==Net.level.revision){cardFor=Net.level.revision;const role=Net.role||'both';
+   cardRole.textContent={arms:'ARMS',legs:'LEGS',both:'ARMS + LEGS'}[role];cardHow.textContent={arms:'Tilt to reach. Hold a pad to grab.',legs:'Lean to swing. Hop to jump.',both:'Tilt, grab and hop. All of it. Alone.'}[role];
+   card.dataset.role=role;card.hidden=false;setTimeout(()=>{card.hidden=true;},6000);}
+  if(!prologue)card.hidden=true;},250);
  window.Narration={get voiced(){return voiced;},get playing(){return playing;},queue};
 })();

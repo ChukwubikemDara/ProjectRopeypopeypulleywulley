@@ -22,30 +22,45 @@ function validateCourse(c){
 const mountain=prepareCourse({...source,id:'mountain',biome:'snow',kind:'race',name:'Snowbound · The Long Way Up',source:'main 8f94284 / complete course',routes:{shortcut:{id:'pipe-roof',name:'Over the pipe',holdIds:source.holds.filter(h=>h.kind==='knob'&&h.x<20).map(h=>h.id),path:[[4,1],[7,5],[20,11],[25,9.2]]}}});
 // The prologue: a short narrated climb that teaches by doing. Each section needs the move it introduces;
 // falling only ever drops you back a section, never to the start.
-// A plain hop lifts the feet about 2.5 m, so the trench (3.2 m) needs a grip and the wall (4.2 m) needs the combo.
-const practice=prepareCourse({id:'practice',biome:'snow',kind:'practice',name:'Prologue · The Foot of the Mountain',
- bounds:{x0:-2,x1:30,y0:-4,y1:14},spawn:{x0:.6,x1:2.6,y:0},finish:{x:26.5,y:5.6,zoneX:25.7},
+// The prologue, built around the script. Two mirrored lanes (left team, right team) climb toward a
+// shared start platform in the middle, where a barrier holds them until the race. A plain hop lifts
+// the feet about 2.5 m, so each obstacle is sized to need the move its narration introduces:
+// the 3 m ledge needs a grab, the gap needs the bar, the wall at the end of the beam needs the combo.
+const mirrorX=pts=>pts.map(([x,y])=>[-x,y]).reverse();
+const lane={
  terrain:[
-  {id:'meadow',kind:'rock',pts:[[-2,-4],[7,-4],[7,0],[-2,0]]},
-  {id:'step',kind:'rock',pts:[[7,-4],[10,-4],[10,1.4],[7,1.4]]},          // first hop
-  {id:'trench',kind:'rock',pts:[[10,-4],[14,-4],[14,-1.8],[10,-1.8]]},    // too deep to hop out of: grab the wall knobs
-  {id:'shelf',kind:'rock',pts:[[14,-4],[18,-4],[18,1.4],[14,1.4]]},
-  {id:'wall',kind:'rock',pts:[[18,-4],[30,-4],[30,5.6],[18,5.6]]},        // too tall to hop: hang, then hop + let go together
-  {id:'left-edge',kind:'boundary',pts:[[-2,-4],[-1,-4],[-1,13],[-2,13]]},
-  {id:'right-edge',kind:'boundary',pts:[[29,-4],[30,-4],[30,13],[29,13]]}],
+  {id:'wake',kind:'rock',pts:[[-36,-4],[-21,-4],[-21,0],[-36,0]]},                 // wake-up spot + the flat walk
+  {id:'ledge',kind:'rock',pts:[[-21,-4],[-15,-4],[-15,3],[-21,3]]},                // too high to hop: arms grab, legs push
+  {id:'return-ramp',kind:'rock',pts:[[-15,-4],[-10.5,-4],[-10.5,2],[-15,1.4]]},     // fall in the gap: it slides you back to the ledge
+  {id:'landing',kind:'rock',pts:[[-10.5,-4],[-9,-4],[-9,5.6],[-10.5,5.6]]},
+  {id:'beam',kind:'bark',pts:[[-9,5.3],[-4,5.3],[-4,5.6],[-9,5.6]]},
+  {id:'under-beam',kind:'rock',pts:[[-9,-4],[-4,-4],[-4,2.6],[-9,2.6]]},
+  {id:'edge',kind:'boundary',pts:[[-37,-4],[-36,-4],[-36,16],[-37,16]]}],
  holds:[
-  {id:'bar-1',x:10.7,y:3.6,kind:'handle'},{id:'bar-2',x:11.6,y:3.6,kind:'handle'},{id:'bar-3',x:12.5,y:3.6,kind:'handle'},{id:'bar-4',x:13.4,y:3.6,kind:'handle'},
-  {id:'trench-lip',x:13.9,y:1.55,kind:'knob'},
-  {id:'wall-low',x:17.85,y:3.1,kind:'rung'},{id:'wall-high',x:17.85,y:3.9,kind:'rung'},
-  {id:'wall-lip',x:18.1,y:5.68,kind:'knob'},{id:'summit-knob',x:19.4,y:5.72,kind:'knob'}],
- objects:[{id:'practice-dummy',kind:'dummy',w:.65,h:1,x0:23,x1:23,y:6.15,speed:0,handles:[]}],
- path:[[1,1],[7,1],[8.5,2.4],[12,2.4],[16,2.4],[17.6,3.8],[19,6.6],[26.5,6.6]],
- signs:[],
- // Reset stance drops the team back at the start of their current section.
- stations:{meadow:{x:1.6,y:1.05},step:{x:7.6,y:2.45},shelf:{x:14.6,y:2.45},summit:{x:19.2,y:6.65}},
+  {id:'ledge-lip',x:-20.95,y:3.08,kind:'knob',hint:'grab'},
+  {id:'gap-bar',x:-13.2,y:6.4,kind:'handle'},
+  {id:'wall-low',x:-4.15,y:7.3,kind:'rung'},{id:'wall-high',x:-4.15,y:8.1,kind:'rung'},
+  {id:'top-lip',x:-3.9,y:9.88,kind:'knob'}],
+ markers:[{x:-15.6,y:4.9,kind:'jump'}],
+ signs:[{x:-31,y:3.2,text:'TWO PEOPLE REQUIRED.',sub:'ONE PERSON PROVIDED.'}],
+};
+const both=(list,map)=>[...list,...list.map(map)];
+const practice=prepareCourse({id:'practice',biome:'snow',kind:'practice',name:'Prologue · Two People Required',mirror:true,fallEvent:1.2,
+ bounds:{x0:-37,x1:37,y0:-4,y1:16},spawn:{x0:-33.5,x1:-31.5,y:0},spawns:[{x0:-33.5,x1:-31.5,y:0},{x0:31.5,x1:33.5,y:0}],finish:{x:0,y:9.8,zoneX:-4},
+ terrain:[...both(lane.terrain,t=>({...t,id:t.id+'-r',pts:mirrorX(t.pts)})),
+  {id:'start-platform',kind:'rock',pts:[[-4,-4],[4,-4],[4,9.8],[-4,9.8]]},
+  {id:'barrier',kind:'barrier',pts:[[-.2,9.8],[.2,9.8],[.2,13],[-.2,13]]}],          // rises when the race starts
+ holds:both(lane.holds,h=>({...h,id:h.id+'-r',x:-h.x})),
+ markers:both(lane.markers,m=>({...m,x:-m.x})),
+ signs:both(lane.signs,s=>({...s,x:-s.x})),
+ objects:[],
+ // left-lane coordinates; the right lane is measured as its mirror image
+ path:[[-33,1],[-21.5,1],[-18,4],[-12.8,5.6],[-9.7,6.6],[-4.6,6.6],[-3,10.8]],
+ // section reset: back to the start of the section you're in
+ stations:{wake:{x:-33,y:1.05},ledge:{x:-17,y:4.05},landing:{x:-9.8,y:6.65},platform:{x:-2.5,y:10.85}},
  zones:[
-  {id:'meadow',x0:-1,x1:7,y0:-1,y1:4},{id:'step',x0:7,x1:10,y0:1.2,y1:5},{id:'trench',x0:10,x1:14,y0:-2,y1:-.6},
-  {id:'shelf',x0:14,x1:18,y0:1.2,y1:5},{id:'wall',x0:17,x1:18.2,y0:2.6,y1:5.6},{id:'summit',x0:18,x1:29,y0:5.4,y1:13}]
+  {id:'walk',x0:-28,x1:-24,y0:-1,y1:4},{id:'ledge',x0:-23.5,x1:-21,y0:-1,y1:2.6},{id:'gap',x0:-18,x1:-15,y0:2.8,y1:8},
+  {id:'beam',x0:-9.5,x1:-5,y0:5.4,y1:9},{id:'platform',x0:-4,x1:0,y0:9.6,y1:15},{id:'start',x0:-36,x1:-21,y0:-1,y1:3}]
 });
 const races=require('./race-courses.cjs');
 const forest=prepareCourse(races.forest),campus=prepareCourse(races.campus);

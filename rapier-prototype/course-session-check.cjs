@@ -10,7 +10,7 @@ function place(sim,c,x,y){for(const h of c.hands)sim.release(h,'test setup');for
  assert.equal(nextRace('mountain',[mountain,fixture]),'forest');assert.equal(nextRace('forest',[mountain,fixture]),'mountain');
  assert.throws(()=>validateCourse({...fixture,path:[[0,0],[0,0]]}));assert.throws(()=>validateCourse({...fixture,holds:[fixture.holds[0],fixture.holds[0]]}));console.log('PASS course validation and ordered race rotation');
  const h=harness();h.inbound('level',{...fixture,revision:1});h.inbound('state3d',{revision:1,phase:'playing',climbers:[]});assert.ok(h.ctx.Net.sample());h.inbound('level',{...mountain,revision:2});assert.equal(h.ctx.Net.sample(),null);h.inbound('state3d',{revision:1,phase:'playing',climbers:[]});assert.equal(h.ctx.Net.sample(),null);h.inbound('state3d',{revision:2,phase:'playing',climbers:[]});assert.ok(h.ctx.Net.sample());console.log('PASS level changes clear interpolation and reject old-map snapshots');
- const game=await createServer({courses:[mountain,practice,fixture]});await new Promise(r=>game.server.listen(0,'127.0.0.1',r));const url=`http://127.0.0.1:${game.server.address().port}`,sockets=[];let state,level;let heartbeat;
+ const game=await createServer({courses:[mountain,practice,fixture]});await new Promise(r=>game.server.listen(0,'127.0.0.1',r));const url=`http://127.0.0.1:${game.server.address().port}`,sockets=[];let state,level;let heartbeat,hurry;
  const connect=async surface=>{const s=io(url,{transports:['websocket'],auth:{surface}});sockets.push(s);s.on('state3d',st=>state=st);s.on('level',l=>level=l);await new Promise(r=>s.on('connect',r));return s;};
  const select=(s,id)=>new Promise(r=>s.emit('selectCourse',id,r));
  try{
@@ -19,21 +19,29 @@ function place(sim,c,x,y){for(const h of c.hands)sim.release(h,'test setup');for
   host.emit('start');await wait(120);assert.equal(state.courseId,'forest');assert.equal(state.phase,'playing');assert.equal((await select(host,'mountain')).ok,false);const firstRevision=level.revision;
   place(game.sim,game.sim.climbers.get(team),12,1.05);await wait(120);assert.equal(state.phase,'results');host.emit('retryRace');await wait(100);assert.equal(state.courseId,'forest');assert.ok(level.revision>firstRevision);
   place(game.sim,game.sim.climbers.get(team),12,1.05);await wait(120);assert.equal(state.phase,'results');host.emit('start');await wait(100);assert.equal(state.courseId,'mountain');console.log('PASS retry stays on the same map; next race advances after a real finish');
-  const narrated=[];arms.on('narrate',l=>narrated.push(l));
+  const narrated=[];arms.on('narrate',l=>narrated.push(l));const released=[];arms.on('event',e=>{if(e.type==='release')released.push(e);});
   host.emit('practice');await wait(100);assert.equal(state.mode,'practice');assert.equal(state.courseId,'practice');assert.equal(game.players.get(arms.id).team,team);let c=game.sim.climbers.get(team);
+  assert.equal(c.slumped,true,'the prologue starts with the body slumped under the sign');
   heartbeat=setInterval(()=>{arms.emit('input',{aim:0,ay:.6,l:false,r:false,brace:true});legs.emit('input',{aim:0,ay:.6,brace:true});},150);
-  await wait(2600);assert.equal(narrated[0]?.id,'intro');assert.ok(narrated[0].text&&narrated[0].duration>1);assert.equal(narrated[0].audio,null);
-  console.log('PASS the prologue opens with the narrator, sent to every device with captions');
-  place(game.sim,c,12,-.75);await wait(300);arms.emit('practiceReset');await wait(150);let p=c.body.translation();assert.ok(p.x>7&&p.x<10&&p.y>2,'reset from the trench returns to the step');
-  place(game.sim,c,16,2.45);await wait(1100);legs.emit('practiceReset');await wait(150);p=c.body.translation();assert.ok(p.x>14&&p.x<15.5,'reset on the shelf stays on the shelf');
-  console.log('PASS section reset returns a stuck team to the start of the section they are in');
-  const dummy=game.sim.objects.find(o=>o.kind==='dummy');const d=dummy.body.translation();place(game.sim,c,d.x-.8,6.65);await wait(300);
-  const kicked=await new Promise(r=>legs.timeout(1000).emit('gesture','kick',1,(err,res)=>r(res?.result)));assert.equal(kicked,'kick');await wait(60);assert.ok(Math.abs(dummy.body.linvel().x)>.1);
-  place(game.sim,c,practice.finish.x,6.65);await wait(120);assert.equal(state.phase,'playing','finishing the prologue does not end the round for everyone');
-  console.log('PASS the snowpal takes a kick at the summit; the flag keeps the prologue running');
+  await wait(2600);assert.equal(narrated[0]?.id,'wake');assert.ok(narrated[0].text.includes('\n')&&narrated[0].duration>5);assert.equal(narrated[0].audio,null);
+  arms.emit('input',{aim:.8,ay:.6,l:false,r:false,brace:true});await wait(60);assert.equal(c.slumped,true,'the arms tilting does not stand the body up');
+  legs.emit('input',{aim:.6,ay:.6,brace:true});await wait(60);assert.equal(c.slumped,false,'the legs leaning stands it up');
+  console.log('PASS the prologue wakes up slumped, the narrator speaks to every device, and the legs stand the body up');
+  place(game.sim,c,-12.5,3.1);await wait(300);arms.emit('practiceReset');await wait(150);let p=c.body.translation();assert.ok(p.x>-18&&p.x<-15.5&&p.y>3.8,'a fall in the gap resets to the top of the ledge');
+  place(game.sim,c,12.5,3.1);await wait(1100);legs.emit('practiceReset');await wait(150);p=c.body.translation();assert.ok(p.x<18&&p.x>15.5&&p.y>3.8,'the right lane resets to its own ledge');
+  console.log('PASS section reset returns a stuck team to the start of their section, in either lane');
+  // fast-forward the narrator so the test doesn't sit through every speech
+  hurry=setInterval(()=>{game.prologue.narrator.busyUntil=0;game.prologue.narrator.later.length=0;},100);
+  place(game.sim,c,-2.5,10.85);await wait(400);
+  for(let i=0;i<60&&!released.length;i++)await wait(100);
+  assert.ok(narrated.some(l=>l.id==='nobody-else'),'a team alone at the barrier gets the solo line');assert.ok(released.length,'the barrier rises once everyone is at the start');
+  clearInterval(hurry);for(let i=0;i<120&&state.mode!=='race';i++)await wait(100);
+  assert.equal(state.mode,'race');assert.equal(state.courseId,'mountain');assert.equal(state.phase,'playing');
+  console.log('PASS the barrier releases everyone into the selected race once the last line ends');
+  host.emit('practice');await wait(100);assert.equal(state.mode,'practice');
   legs.emit('start');await wait(60);assert.equal(state.mode,'practice');host.emit('start');await wait(100);assert.equal(state.mode,'race');assert.equal(state.courseId,'mountain');
   host.emit('endRound');await wait(60);for(let i=0;i<8;i++){const id=i%2?'mountain':'forest';assert.equal((await select(host,id)).ok,true);assert.equal(game.sim.course.id,id);assert.equal(game.sim.climbers.size,1);}
   assert.equal(game.sim.objects.length,1);assert.equal(game.players.get(arms.id).role,'arms');assert.equal(game.players.get(legs.id).role,'legs');console.log('PASS practice can be left immediately; repeated map rebuilds retain roles and clean hazards');
   host.disconnect();await wait(60);assert.equal(game.session.host,arms.id);const replacement=await connect('spectator');await wait(40);assert.equal(game.session.host,replacement.id);console.log('PASS host reconnect and spectator takeover remain usable');
- }finally{clearInterval(heartbeat);sockets.forEach(s=>s.disconnect());await game.close();}
+ }finally{clearInterval(heartbeat);clearInterval(hurry);sockets.forEach(s=>s.disconnect());await game.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

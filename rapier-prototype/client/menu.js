@@ -5,7 +5,7 @@
  const make=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text)e.textContent=text;return e;};
  const menu=make('section','main-menu');menu.setAttribute('aria-label','Main menu');
  const logo=make('h1','menu-logo','TETHERED'),tag=make('p','menu-tag','Two phones. One body. Zero trust.');
- const prologue=make('button','menu-button prologue');prologue.type='button';prologue.append(make('b',null,'PROLOGUE'),make('small',null,'The foot of the mountain · learn to climb together'));
+ const prologue=make('button','menu-button prologue');prologue.type='button';prologue.append(make('b',null,'PROLOGUE'),make('small',null,'Two people required · learn to climb together'));
  const race=make('button','menu-button race');race.type='button';race.append(make('b',null,'RACE'),make('small','menu-race-map',''));
  const maps=make('div','menu-maps');maps.setAttribute('role','radiogroup');maps.setAttribute('aria-label','Race map');
  const note=make('p','menu-note','');
