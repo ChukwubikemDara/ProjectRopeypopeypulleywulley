@@ -7,7 +7,7 @@ const prismSource=source.slice(source.indexOf('function prism('),source.indexOf(
 const terrainSource=source.slice(source.indexOf(' for(const t of L.terrain.filter'),source.indexOf(' if(L.pipe)'));
 const scene=new THREE.Group(),materials=Object.fromEntries(['metal','rust','rock','dark','wood','snow'].map(key=>[key,new THREE.MeshBasicMaterial()]));
 try{
- vm.runInNewContext(prismSource+'\n'+terrainSource,{THREE,L:campus,...materials,mesh:(geometry,material)=>{const m=new THREE.Mesh(geometry,material);scene.add(m);return m;}});
+ vm.runInNewContext(prismSource+'\n'+terrainSource,{THREE,L:campus,...materials,mat:()=>new THREE.MeshBasicMaterial(),mesh:(geometry,material)=>{const m=new THREE.Mesh(geometry,material);scene.add(m);return m;}});
  scene.updateMatrixWorld(true);
  for(const x of [24.1,27,29.9,30.1,31.5,32.9])for(const z of [-1.6,0,1.6]){
   const top=x<30?4.8+(x-24)*.7:9,ray=new THREE.Raycaster(new THREE.Vector3(x,top+1,z),new THREE.Vector3(0,-1,0));

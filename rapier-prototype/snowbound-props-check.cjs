@@ -48,6 +48,10 @@ function combo(sim,c,side,steer=75){c.lastCombo=-10;assert.ok(sim.gesture(c,'fli
   let across=false;for(let t=0;t<4&&!across;t++){place(sim,c,25,17.75);tick(sim,60);c.arms.aim=.9;sim.gesture(c,'flick',1);tick(sim,80);c.arms.aim=0;tick(sim,160);across=onLedge();}
   assert.ok(across,`a committed hop gets you from the overhang onto the top ledge ${at(c)}`);
   console.log('PASS overhang: the ski gets you onto the overhang, and a hop gets you across to the top ledge');
+  // the overhang's post hangs above the checkpoint ledge: you can walk underneath it from the pipe to the twig wall
+  place(sim,c,23.2,9.05);tick(sim,60);let walked=0;for(let k=0;k<8;k++){c.arms.aim=.6;sim.gesture(c,'flick',.7);tick(sim,25);c.arms.aim=0;tick(sim,70);walked=Math.max(walked,pos(c).x);}
+  assert.ok(walked>26.3,`the checkpoint ledge is walkable past the overhang's post (got to ${walked.toFixed(2)})`);
+  console.log('PASS checkpoint: you can walk under the overhang from the pipe to the twig wall');
   // the twig wall: the overhang no longer covers it, so the twig combo lands on the ledge (no stones needed)
   const twig=sim.holds.find(h=>h.kind==='twig');let landed=false;
   for(let t=0;t<4&&!landed;t++){place(sim,c,twig.x-.4,twig.y-.75);twig.loadMs=0;sim.grab(c.hands[0],twig);sim.grab(c.hands[1],twig);c.arms={aim:.3,ay:.9,l:true,r:true,brace:true};c.legs.aim=.4;tick(sim,35);c.lastCombo=-10;sim.gesture(c,'flick',1);tick(sim,10);sim.setHand(c,0,false);sim.setHand(c,1,false);c.arms={aim:0,ay:.6,l:false,r:false,brace:true};tick(sim,25);c.arms.aim=.9;tick(sim,235);landed=onLedge()||pos(c).x>27.6&&pos(c).y>15.6;}
