@@ -105,8 +105,11 @@ function build(L){
  }
  decorateBiome(L,{mesh,puff,box,prism,mat,rock,snow,wood,dark});
  const pole=mesh(new THREE.CylinderGeometry(.035,.035,2,8),dark,[L.finish.x,L.finish.y+1,0]);flag=mesh(new THREE.PlaneGeometry(1,.5,12,4),rust.clone(),[L.finish.x+.5,L.finish.y+1.7,0]);flag.material.side=THREE.DoubleSide;flag.userData.base=new Float32Array(flag.geometry.attributes.position.array);
+ // Signs stand behind the climbers (z 0) so they never hide anyone. A sign printed on solid rock sits on its front face instead: nobody can stand inside rock.
+ const inside=(pts,x,y)=>pts.every((a,i)=>{const b=pts[(i+1)%pts.length];return (b[0]-a[0])*(y-a[1])-(b[1]-a[1])*(x-a[0])>=0;});
+ const signDepth=sign=>[[-2.4,-.6],[2.4,-.6],[2.4,.6],[-2.4,.6]].every(([dx,dy])=>L.terrain.some(t=>inside(t.pts,sign.x+dx,sign.y+dy)))?L.depth/2+.02:-L.depth/2+.3;
  // Small signs carry main's route cues without filling the phone HUD with instructions.
- for(const sign of L.signs){const canvas=document.createElement('canvas');canvas.width=768;canvas.height=192;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff9e9';ctx.fillRect(0,0,768,192);ctx.fillStyle='#385567';ctx.font='800 54px system-ui';ctx.textAlign='center';ctx.fillText(sign.text,384,76);ctx.font='26px system-ui';ctx.fillText(sign.sub,384,132);const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;const m=mesh(new THREE.PlaneGeometry(4.8,1.2),new THREE.MeshBasicMaterial({map:tex}),[sign.x,sign.y,2]);m.castShadow=false;}
+ for(const sign of L.signs){const canvas=document.createElement('canvas');canvas.width=768;canvas.height=192;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff9e9';ctx.fillRect(0,0,768,192);ctx.fillStyle='#385567';ctx.font='800 54px system-ui';ctx.textAlign='center';ctx.fillText(sign.text,384,76);ctx.font='26px system-ui';ctx.fillText(sign.sub,384,132);const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;const m=mesh(new THREE.PlaneGeometry(4.8,1.2),new THREE.MeshBasicMaterial({map:tex}),[sign.x,sign.y,signDepth(sign)]);m.castShadow=false;}
 
  terrainGroup.traverse(o=>{o.updateMatrix();o.matrixAutoUpdate=false;});for(const {mesh:m,data:h}of holdModels.values())if(h.objectId||h.kind==='twig')m.matrixAutoUpdate=true;terrainGroup.updateMatrixWorld(true);window.LabSetView?.(Net.phase==='playing'?'follow':'overview');
 }
