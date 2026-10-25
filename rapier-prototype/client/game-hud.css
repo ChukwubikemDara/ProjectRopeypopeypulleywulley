@@ -93,3 +93,8 @@
 .phone #startBtn{background:var(--coral)!important}
 .phone #lobby .practice-start:active,.phone #startBtn:active{transform:translateY(5px);border-bottom-width:3px!important}
 .phone .practice-invite{font-family:var(--chunk);font-weight:800;color:var(--ink)}
+
+/* No double-tap or pinch zoom anywhere on the phone (iOS Safari ignores user-scalable=no).
+   manipulation keeps scrolling in the lobby panels; the hand pads and touch aim pad take every touch themselves. */
+.phone,.phone *{touch-action:manipulation}
+.phone .pad,.phone .touch-aim-pad,.phone .aimpad{touch-action:none}

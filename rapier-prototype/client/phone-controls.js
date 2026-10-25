@@ -35,6 +35,11 @@
  touch.onchange=()=>setTouchMode(touch.checked);
  function setTouchMode(on){touch.checked=!!on;PhoneInput.setTouchMode(on);}
  window.PhoneControls={setTouchMode};
+ // iOS Safari zooms on a quick second tap or a pinch no matter what the viewport says. Swallow both
+ // (text fields excepted, so typing a name still works). The pads use touchstart/touchend themselves, so they keep working.
+ let lastTouchEnd=0;
+ document.addEventListener('touchend',e=>{const now=performance.now();if(now-lastTouchEnd<350&&!e.target.closest?.('input,select,textarea'))e.preventDefault();lastTouchEnd=now;},{passive:false});
+ for(const type of ['gesturestart','gesturechange','gestureend','dblclick'])document.addEventListener(type,e=>e.preventDefault(),{passive:false});
  const feet=[$('footL'),$('footR')];
  const footLabels=feet.map((foot,i)=>{foot.replaceChildren();const side=create('b',null,null,i?'R FOOT':'L FOOT'),state=create('small',null,'foot-state','Free');foot.append(side,state);return state;});
  let previous='';
