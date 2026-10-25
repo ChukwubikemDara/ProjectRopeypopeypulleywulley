@@ -1,0 +1,28 @@
+/* Big-screen main menu, chunky toy style to match the phone HUD. */
+@import url('https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@800;900&display=swap');
+.main-menu{position:fixed;z-index:15;top:50%;right:max(4vw,24px);transform:translateY(-50%);width:min(440px,46vw);display:grid;gap:14px;
+ font-family:'Nunito','SF Pro Rounded',system-ui,sans-serif;color:#22304a}
+.main-menu[hidden]{display:none}
+.menu-logo{margin:0;font:400 clamp(54px,7vw,96px)/.9 'Lilita One','Arial Rounded MT Bold',system-ui,sans-serif;letter-spacing:2px;color:#fff;
+ -webkit-text-stroke:6px #22304a;paint-order:stroke fill;text-shadow:0 8px 0 #22304a;transform:rotate(-3deg);transform-origin:left}
+.menu-tag{margin:0 0 10px;font-weight:900;font-size:18px;color:#22304a}
+.menu-button{display:grid;gap:2px;text-align:left;padding:16px 22px;border:4px solid #22304a;border-bottom-width:10px;border-radius:22px;cursor:pointer;
+ transition:transform .06s,border-bottom-width .06s}
+.menu-button b{font:400 34px/1 'Lilita One','Arial Rounded MT Bold',system-ui,sans-serif;letter-spacing:1.5px}
+.menu-button small{font-weight:800;font-size:14px;opacity:.9}
+.menu-button.prologue{background:#5ab7c9;color:#fff}
+.menu-button.race{background:#e8664a;color:#fff}
+.menu-button:hover:not(:disabled){transform:translateY(-2px)}
+.menu-button:active:not(:disabled){transform:translateY(6px);border-bottom-width:4px}
+.menu-button:disabled{opacity:.6;cursor:default}
+.menu-maps{display:flex;gap:8px;flex-wrap:wrap}
+.menu-map{padding:8px 14px;border:3px solid #22304a;border-bottom-width:6px;border-radius:14px;background:#fff9ec;color:#22304a;
+ font:400 16px 'Lilita One','Arial Rounded MT Bold',system-ui,sans-serif;letter-spacing:.8px;cursor:pointer}
+.menu-map.on{background:#f2c94c}
+.menu-map:disabled{cursor:default}
+.menu-note{margin:0;font-weight:800;font-size:14px;color:#3b4e66}
+.menu-back{position:fixed;z-index:21;right:22px;bottom:76px;padding:8px 14px;border:3px solid #22304a;border-bottom-width:5px;border-radius:14px;
+ background:#fff9ec;color:#22304a;font:400 16px 'Lilita One','Arial Rounded MT Bold',system-ui,sans-serif;letter-spacing:.8px;cursor:pointer}
+.menu-back[hidden]{display:none}
+.menu-open .lab-title,.menu-open #practiceStart,.menu-open #start,.menu-open #courseLabel,.menu-open #courseSelect{display:none!important}
+.menu-open .lab-status{display:none}

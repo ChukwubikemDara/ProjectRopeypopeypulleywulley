@@ -86,3 +86,10 @@
 .phone #danger{font-family:var(--game);font-weight:400;color:#fff;-webkit-text-stroke:4px var(--ink);paint-order:stroke fill;text-shadow:0 4px 0 var(--ink);letter-spacing:1px}
 .phone .gear{background:var(--cream);border:3px solid var(--ink);border-bottom-width:5px;color:var(--ink);box-shadow:none}
 
+/* phone lobby menu buttons */
+.phone #lobby .practice-start,.phone #startBtn{border:3px solid var(--ink)!important;border-bottom-width:8px!important;border-radius:18px;box-shadow:none;
+ font-family:var(--game);font-weight:400;font-size:20px;letter-spacing:1px;padding:14px;color:#fff!important;transition:transform .06s,border-bottom-width .06s}
+.phone #lobby .practice-start{background:var(--teal)!important}
+.phone #startBtn{background:var(--coral)!important}
+.phone #lobby .practice-start:active,.phone #startBtn:active{transform:translateY(5px);border-bottom-width:3px!important}
+.phone .practice-invite{font-family:var(--chunk);font-weight:800;color:var(--ink)}
