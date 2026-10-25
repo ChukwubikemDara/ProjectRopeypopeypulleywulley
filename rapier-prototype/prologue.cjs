@@ -1,9 +1,9 @@
 // Runs the prologue around the narrator: the wake-up slump, which section each team is in, falls,
-// arrivals at the start platform, and the barrier that releases everyone into the race.
+// arrivals at the flag on the start platform, and the release of everyone into the race.
 // RaceVoice reuses the fall reactions during races.
 const {Narrator,FALL_LINES,duration}=require('./narration.cjs');
 const OPPOSED_WINDOW=1.5; // s: arms and legs pulling different ways this recently counts as "opposite"
-const WAIT_LIMIT=40;      // s after the first team arrives before the barrier goes up anyway
+const WAIT_LIMIT=40;      // s after the first team arrives before the race starts anyway
 const MOVING=.35;         // m/s: slower than this counts as standing still
 
 // arms tilting one way while the legs lean the other
