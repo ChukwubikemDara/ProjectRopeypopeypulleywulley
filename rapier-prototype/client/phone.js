@@ -129,6 +129,7 @@
     socket.timeout(2000).emit('gesture', g, power, (err, result) => {
       lag.hop = err ? 2000 : Math.round(performance.now() - t0);
       lag.result = err ? 'lost' : (result?.result || result);
+      if (g === 'kick') window.PhoneInput.kickResult = { text: err ? 'lost' : result?.result, at: performance.now() };
     });
     return true;
   }

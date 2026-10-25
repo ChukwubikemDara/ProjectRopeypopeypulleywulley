@@ -54,7 +54,8 @@
   buttons.yank.button.disabled=buttons.kick.button.disabled=!active||arms||locked;
   if(kick?.cooldown>0)buttons.kick.button.disabled=true;
   text(buttons.flick.sub,jump?.cooldown>0?`Wait ${jump.cooldown.toFixed(1)}s`:jump?.ready?'Tap or hop':'Need footing');
-  text(buttons.yank.sub,'Tap or squat');text(buttons.kick.sub,kick?.cooldown>0?`Wait ${kick.cooldown.toFixed(1)}s`:'Tap or shove');
+  text(buttons.yank.sub,'Tap or squat');const kicked=PhoneInput.kickResult,recent=kicked&&performance.now()-kicked.at<900;
+  text(buttons.kick.sub,recent?({kick:'Hit!','no rival nearby':'Too far',cooldown:'Recharging',lost:'No signal'}[kicked.text]||kicked.text||''):kick?.cooldown>0?`Wait ${kick.cooldown.toFixed(1)}s`:'Tap or shove');buttons.kick.button.dataset.result=recent?kicked.text:'';
   status.hidden=!active;
   let label='Find footing',detail='Catch a course hold or land before jumping.',tone='air';
   if(jump?.releaseNow){label=arms?'Release both hands!':'Arms: release now!';detail='Your hop is ready for a teamwork combo.';tone='combo';}

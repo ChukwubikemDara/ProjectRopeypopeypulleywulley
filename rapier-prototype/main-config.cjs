@@ -41,6 +41,7 @@ const CONFIG = {
   comboCost: 15,          // stamina
   kickImpulse: 4,
   kickCooldown: 1.5,
+  kickRange: 1,           // m from a kicking foot to the rival's torso or feet
 
   // jumping (legs only) + steering (arms only)
   flickJank: 0.1,         // +/- random power on every hop (Foddian pain)

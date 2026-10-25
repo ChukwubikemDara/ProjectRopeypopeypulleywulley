@@ -165,6 +165,8 @@ class Simulation {
       releaseNow:comboAvailable&&hanging&&c.pushHanging&&this.time-c.lastPush<this.config.comboWindow,
       hopNow:comboAvailable&&justReleased&&c.letGoHanging};
   }
+  // Nearest kicker foot to the target's torso or feet. Measuring only to the torso missed rivals standing right beside you.
+  kickReach(c,target){const parts=[target,...(target.feet||[])];return Math.min(...c.feet.flatMap(f=>parts.map(p=>len(sub(f.body.translation(),p.body.translation())))));}
   gesture(c,g,power=1){
     if(g==='flick'||g==='push'){
       const jump=this.jumpState(c),justReleased=!c.hands.some(h=>h.grip)&&this.time-c.lastLetGo<this.config.comboWindow;
@@ -178,10 +180,10 @@ class Simulation {
     if(g==='kick'){
       if(this.time-(c.lastKick??-10)<this.config.kickCooldown){c.lastGestureResult='cooldown';return false;}
       c.lastKick=this.time;c.lastGestureResult='no rival nearby';
-      for(const other of this.climbers.values())if(other!==c&&c.feet.some(f=>len(sub(f.body.translation(),other.body.translation()))<1)){
+      for(const other of this.climbers.values())if(other!==c&&this.kickReach(c,other)<this.config.kickRange){
         const d=norm(sub(other.body.translation(),c.body.translation()));other.body.applyImpulse(mul(add(d,V(0,.3,0)),this.config.kickImpulse*other.body.mass()),true);const held=!(this.courseGrips(other)&&!other.braced);if(!held){this.release(other.hands.find(h=>h.grip?.kind==='hold'),'kicked');this.events.push({type:'slip',id:other.id,reason:'kicked'});}else other.stamina=Math.max(0,other.stamina-20);c.stats.kicks++;c.lastGestureResult='kick';this.events.push({type:'kick',id:c.id,target:other.id,held});
       }
-      for(const dummy of this.objects)if(dummy.kind==='dummy'&&c.feet.some(f=>len(sub(f.body.translation(),dummy.body.translation()))<1)){
+      for(const dummy of this.objects)if(dummy.kind==='dummy'&&this.kickReach(c,dummy)<this.config.kickRange){
         const direction=norm(add(sub(dummy.body.translation(),c.body.translation()),V(0,.4,0)));dummy.body.applyImpulse(mul(direction,this.config.kickImpulse*dummy.body.mass()),true);c.lastGestureResult='kick';c.stats.kicks++;this.events.push({type:'kick',id:c.id,target:dummy.id,practice:true});
       }
       return true;
