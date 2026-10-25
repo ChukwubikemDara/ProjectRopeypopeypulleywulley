@@ -23,7 +23,7 @@ const mountain=prepareCourse({...source,id:'mountain',biome:'snow',kind:'race',n
 // The prologue: a short narrated climb that teaches by doing. Each section needs the move it introduces;
 // falling only ever drops you back a section, never to the start.
 // The prologue, built around the script. Two mirrored lanes (left team, right team) climb toward a
-// shared start platform in the middle, where a barrier holds them until the race. A plain hop lifts
+// shared start platform in the middle, marked with a flag, where they wait for the race. A plain hop lifts
 // the feet about 2.5 m, so each obstacle is sized to need the move its narration introduces:
 // the 3 m ledge needs a grab, the gap needs the bar, the wall at the end of the beam needs the combo.
 const mirrorX=pts=>pts.map(([x,y])=>[-x,y]).reverse();
@@ -48,8 +48,7 @@ const both=(list,map)=>[...list,...list.map(map)];
 const practice=prepareCourse({id:'practice',biome:'snow',kind:'practice',name:'Prologue · Two People Required',mirror:true,fallEvent:1.2,
  bounds:{x0:-37,x1:37,y0:-4,y1:16},spawn:{x0:-33.5,x1:-31.5,y:0},spawns:[{x0:-33.5,x1:-31.5,y:0},{x0:31.5,x1:33.5,y:0}],finish:{x:0,y:9.8,zoneX:-4},
  terrain:[...both(lane.terrain,t=>({...t,id:t.id+'-r',pts:mirrorX(t.pts)})),
-  {id:'start-platform',kind:'rock',pts:[[-4,-4],[4,-4],[4,9.8],[-4,9.8]]},
-  {id:'barrier',kind:'barrier',pts:[[-.2,9.8],[.2,9.8],[.2,13],[-.2,13]]}],          // rises when the race starts
+  {id:'start-platform',kind:'rock',pts:[[-4,-4],[4,-4],[4,9.8],[-4,9.8]]}],          // a flag in the middle marks the end of the prologue
  holds:both(lane.holds,h=>({...h,id:h.id+'-r',x:-h.x})),
  markers:both(lane.markers,m=>({...m,x:-m.x})),
  signs:both(lane.signs,s=>({...s,x:-s.x})),

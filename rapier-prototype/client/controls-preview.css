@@ -48,3 +48,10 @@
 .cp-stage[data-demo=tap] .tap-target{opacity:1;transform-box:fill-box;transform-origin:center;animation:cpPress 1s ease-in-out infinite}
 @keyframes cpDrag{from{transform:translateX(-5px)}to{transform:translateX(22px)}}
 @media(prefers-reduced-motion:reduce){.cp-stage .tap-target{animation:none!important}}
+
+/* the combo card: thumbs lift off both pads (LET GO), or the phone hops while they do (solo) */
+.controls-preview[data-kind=combo] .cp-head{background:#f2a516}
+.cp-stage[data-demo=release] .thumb,.cp-stage[data-demo=combo] .thumb{opacity:1;transform-box:fill-box;transform-origin:50% 50%;animation:cpLift 1.4s ease-in-out infinite}
+.cp-stage[data-demo=combo] .phone{animation:cpFlick 1.4s cubic-bezier(.3,.7,.4,1) infinite}
+.cp-stage[data-demo=combo] .marks-flick{animation:cpFade 1.4s infinite}
+@keyframes cpLift{0%,8%{opacity:1;transform:none}16%,70%{opacity:0;transform:translateY(-14px) scale(1.4)}86%,100%{opacity:1;transform:none}}

@@ -25,7 +25,7 @@ const mat=color=>new THREE.MeshStandardMaterial({color,roughness:.85});
 const rock=mat('#8d99a4'),snow=mat('#f4f3e9'),metal=mat('#77a5af'),rust=mat('#df9476'),dark=mat('#435d70'),wood=mat('#bb9271');
 const holdMats=['#3db8aa','#ed907a','#84b5d5'].map(mat);
 const terrainGroup=new THREE.Group();scene.add(terrainGroup);
-const cueGroup=new THREE.Group();scene.add(cueGroup);const cues=[];let barrier=null;const roleTags=new Map();
+const cueGroup=new THREE.Group();scene.add(cueGroup);const cues=[];const roleTags=new Map();
 function mesh(geo,material,pos,parent=terrainGroup){const m=new THREE.Mesh(geo,material);if(pos)m.position.set(...pos);m.castShadow=m.receiveShadow=true;parent.add(m);return m;}
 const ball=new THREE.SphereGeometry(1,24,18);
 function puff(pos,scale,material=snow){const m=mesh(ball,material,pos);m.scale.set(...scale);return m;}
@@ -40,7 +40,7 @@ function clearLevel(){
  const roots=[terrainGroup,...[...objectModels.values()].map(o=>o.root)];
  for(const root of roots){root.traverse(o=>{if(o.isInstancedMesh)o.dispose();if(o.geometry&&o.geometry!==ball)geometries.add(o.geometry);for(const m of [o.material].flat().filter(Boolean))if(!persistentMaterials.has(m)){materials.add(m);if(m.map)textures.add(m.map);}});if(root!==terrainGroup)scene.remove(root);}
  terrainGroup.clear();holdModels.clear();objectModels.clear();flag=null;
- cueGroup.traverse(o=>{o.geometry?.dispose();o.material?.map?.dispose();if(o.material&&!persistentMaterials.has(o.material))o.material.dispose();});cueGroup.clear();cues.length=0;barrier=null;
+ cueGroup.traverse(o=>{o.geometry?.dispose();o.material?.map?.dispose();if(o.material&&!persistentMaterials.has(o.material))o.material.dispose();});cueGroup.clear();cues.length=0;
  for(const g of geometries)g.dispose();for(const t of textures)t.dispose();for(const m of materials)m.dispose();
  for(const m of models.values()){scene.remove(m.root);m.dispose();}models.clear();
  for(const target of targets.values()){scene.remove(target);target.geometry.dispose();}targets.clear();
@@ -50,10 +50,10 @@ function build(L){
  if(level&&level.revision===L.revision&&level.id===L.id)return;if(level)clearLevel();level=L;
  const palettes={snow:['#b9d9e5','#c2dae3','#8d99a4','#f4f3e9','#bb9271','#ffe0b5','#c3e6ff','#837078'],forest:['#b5cec2','#b5cec2','#9b805e','#9cba7b','#a68a64','#fff0c6','#d3e8d3','#6f806a'],campus:['#c8dce5','#c8dce5','#d8c4a4','#a8bc87','#d9c39f','#ffe4bd','#dce9f1','#938a82']};
  const palette=palettes[L.biome]||palettes.snow;scene.background=new THREE.Color(palette[0]);scene.fog.color.set(palette[1]);rock.color.set(palette[2]);snow.color.set(palette[3]);wood.color.set(palette[4]);sun.color.set(palette[5]);hemisphere.color.set(palette[6]);hemisphere.groundColor.set(palette[7]);scene.fog.near=48;scene.fog.far=170;
- document.querySelector('.lab-title span')?.replaceChildren(document.createTextNode(L.kind==='practice'?'TETHERED / PROLOGUE':'TETHERED / '+({forest:'FOREST',campus:'OLD MAIN'}[L.biome]||'SNOWBOUND')));
+ document.querySelector('.lab-title span')?.replaceChildren(document.createTextNode(L.kind==='practice'?'TWO LEFT LEGS / PROLOGUE':'TWO LEFT LEGS / '+({forest:'FOREST',campus:'OLD MAIN'}[L.biome]||'SNOWBOUND')));
  document.querySelector('.lab-title h1')?.replaceChildren(document.createTextNode(L.kind==='practice'?'Two people required.':({forest:'Branch management.',campus:'Old Main. New heights.'}[L.biome]||'The long way through.')));
  document.querySelector('.lab-title p')?.replaceChildren(document.createTextNode(L.kind==='practice'?'Two of you. One body. Listen to the narrator.':'Two phones. One climber. Make it to the flag.'));
- for(const t of L.terrain.filter(t=>(L.biome==='snow'||t.kind!=='boundary')&&t.kind!=='barrier'))prism(t.pts,L.depth,t.kind==='pipe'?metal:t.kind==='crate'?rust:t.kind==='roof'&&L.biome==='campus'?[rock,dark]:t.kind==='ridge'||t.kind==='roof'?dark:t.kind==='bark'?wood:t.kind==='grass'||t.kind==='moss'?snow:rock);
+ for(const t of L.terrain.filter(t=>L.biome==='snow'||t.kind!=='boundary'))prism(t.pts,L.depth,t.kind==='pipe'?metal:t.kind==='crate'?rust:t.kind==='roof'&&L.biome==='campus'?[rock,dark]:t.kind==='ridge'||t.kind==='roof'?dark:t.kind==='bark'?wood:t.kind==='grass'||t.kind==='moss'?snow:rock);
  // One extrusion per roof: cream front/back faces and dark edge faces, without coplanar skins.
  if(L.pipe){
  const P=L.pipe,R=P.gap/2+P.slab/2,angle=Math.atan2(P.dir[1],P.dir[0]);
@@ -174,17 +174,18 @@ function build(L){
  }
  decorateBiome(L,{mesh,puff,box,prism,mat,rock,snow,wood,dark});
  ambience=createAmbience(L,{mesh,puff,box,mat,phone,root:terrainGroup});scene.background=ambience.sky;scene.add(ambience.hero);
- const pole=mesh(new THREE.CylinderGeometry(.035,.035,2,8),dark,[L.finish.x,L.finish.y+1,0]);flag=mesh(new THREE.PlaneGeometry(1,.5,12,4),rust.clone(),[L.finish.x+.5,L.finish.y+1.7,0]);flag.material.side=THREE.DoubleSide;flag.userData.base=new Float32Array(flag.geometry.attributes.position.array);
+ // the flag stands just behind the climbers (z -0.6) so people arriving don't walk through its pole
+ const pole=mesh(new THREE.CylinderGeometry(.035,.035,2,8),dark,[L.finish.x,L.finish.y+1,-.6]);flag=mesh(new THREE.PlaneGeometry(1,.5,12,4),rust.clone(),[L.finish.x+.5,L.finish.y+1.7,-.6]);flag.material.side=THREE.DoubleSide;flag.userData.base=new Float32Array(flag.geometry.attributes.position.array);
  // Signs stand behind the climbers (z 0) so they never hide anyone. A sign printed on solid rock sits on its front face instead: nobody can stand inside rock.
  const inside=(pts,x,y)=>pts.every((a,i)=>{const b=pts[(i+1)%pts.length];return (b[0]-a[0])*(y-a[1])-(b[1]-a[1])*(x-a[0])>=0;});
  const signDepth=sign=>[[-2.4,-.6],[2.4,-.6],[2.4,.6],[-2.4,.6]].every(([dx,dy])=>L.terrain.some(t=>inside(t.pts,sign.x+dx,sign.y+dy)))?L.depth/2+.02:-L.depth/2+.3;
- // Prologue cues: a pulsing ring where the arms can grab, a bobbing arrow where the legs should jump,
- // and the wooden start barrier that rises when the race begins.
+ // Prologue cues: a pulsing ring where the arms can grab, a bobbing arrow where the legs should jump.
  for(const h of L.holds.filter(h=>h.hint==='grab')){const ring=new THREE.Mesh(new THREE.TorusGeometry(.3,.04,8,32),new THREE.MeshBasicMaterial({color:'#f2c94c'}));ring.position.set(h.x,h.y,(h.z||0)+.1);cueGroup.add(ring);cues.push({mesh:ring,kind:'grab'});}
  for(const m of L.markers||[]){const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const ctx=canvas.getContext('2d');ctx.font='900 110px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=14;ctx.strokeStyle='#22304a';ctx.strokeText('↑',64,68);ctx.fillStyle='#f2c94c';ctx.fillText('↑',64,68);
   const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;const arrow=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthWrite:false}));arrow.scale.set(.9,.9,1);arrow.position.set(m.x,m.y,.3);cueGroup.add(arrow);cues.push({mesh:arrow,kind:'jump',y:m.y});}
- // Direction arrows: small chevrons every few metres along the racing line, behind the climbers (z < 0) so they
- // never cover anyone, pulsing gently the way to go. Spots that would sit inside rock are skipped.
+ // Direction arrows: small chevrons every few metres along the racing line, just behind the climbers (z = -0.45) so they
+ // never cover anyone, but in front of the scenery, snow and props at the back of the course (at z -1.5 they hid
+ // behind it). Pulsing gently the way to go. Spots that would sit inside rock are skipped.
  {const chevron=new THREE.Shape([[-.2,.26],[.06,0],[-.2,-.26],[-.05,-.26],[.21,0],[-.05,.26]].map(([x,y])=>new THREE.Vector2(x,y)));
   const fill=new THREE.MeshBasicMaterial({color:'#f2c94c',transparent:true,opacity:.85,depthWrite:false}),edge=new THREE.MeshBasicMaterial({color:'#22304a',transparent:true,opacity:.7,depthWrite:false});
   const front=new THREE.ShapeGeometry(chevron),back=front.clone();back.scale(1.28,1.22,1);
@@ -195,16 +196,13 @@ function build(L){
     const [ax,ay]=L.path[i],[bx,by]=L.path[i+1],len=Math.hypot(bx-ax,by-ay),angle=Math.atan2(by-ay,(bx-ax)*lane);
     for(let d=carry;d<len;d+=4){
      const x=(ax+(bx-ax)*d/len)*lane,y=ay+(by-ay)*d/len;if(solid(x,y))continue;
-     const g=new THREE.Group();g.position.set(x,y,-L.depth/2+.2);g.rotation.z=angle;
+     const g=new THREE.Group();g.position.set(x,y,-.45);g.rotation.z=angle;g.scale.setScalar(1.15);
      const outline=new THREE.Mesh(back,edge);outline.position.z=-.01;const arrow=new THREE.Mesh(front,fill);g.add(outline,arrow);cueGroup.add(g);
      cues.push({mesh:g,kind:'arrow',x,y,dx:Math.cos(angle),dy:Math.sin(angle),phase:(x+y)*.4});
     }
     carry=(carry-len)%4;if(carry<0)carry+=4;
    }
   }}
- const gate=L.terrain.find(t=>t.kind==='barrier');
- if(gate){const xs=gate.pts.map(p=>p[0]),ys=gate.pts.map(p=>p[1]),w=Math.max(...xs)-Math.min(...xs),h=Math.max(...ys)-Math.min(...ys);
-  const panel=new THREE.Mesh(new THREE.BoxGeometry(w,h,L.depth*.9),wood);panel.position.set((Math.max(...xs)+Math.min(...xs))/2,(Math.max(...ys)+Math.min(...ys))/2,0);panel.castShadow=panel.receiveShadow=true;cueGroup.add(panel);barrier={mesh:panel,rise:0,raising:false};}
  // Small signs carry main's route cues without filling the phone HUD with instructions.
  for(const sign of L.signs){const canvas=document.createElement('canvas');canvas.width=768;canvas.height=192;const ctx=canvas.getContext('2d');ctx.fillStyle='#fff9e9';ctx.fillRect(0,0,768,192);ctx.fillStyle='#385567';ctx.font='800 54px system-ui';ctx.textAlign='center';ctx.fillText(sign.text,384,76);ctx.font='26px system-ui';ctx.fillText(sign.sub,384,132);const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;const m=mesh(new THREE.PlaneGeometry(4.8,1.2),new THREE.MeshBasicMaterial({map:tex}),[sign.x,sign.y,signDepth(sign)]);m.castShadow=false;}
 
@@ -286,8 +284,6 @@ renderer.setAnimationLoop(now=>{
    tempV.set(c.x,c.y+1.5,c.z||0).project(camera);tag.style.transform=`translate(-50%,-100%) translate(${(tempV.x+1)/2*innerWidth}px,${(1-tempV.y)/2*innerHeight}px)`;tag.hidden=tempV.z>1;}
   for(const [id,tag]of roleTags)if(!seenTags.has(id)){tag.remove();roleTags.delete(id);}}
  const pulse=now/1000;for(const cue of cues){if(cue.kind==='grab'){const k=1+Math.sin(pulse*4)*.15;cue.mesh.scale.set(k,k,k);}else if(cue.kind==='arrow'){const nudge=(Math.sin(pulse*2.4-cue.phase)+1)*.08;cue.mesh.position.x=cue.x+cue.dx*nudge;cue.mesh.position.y=cue.y+cue.dy*nudge;}else cue.mesh.position.y=cue.y+Math.sin(pulse*3)*.12;}
- if(barrier?.raising&&barrier.rise<4.5){const step=Math.min(4.5-barrier.rise,dt*2.2);barrier.rise+=step;barrier.mesh.position.y+=step;}
  renderer.render(scene,camera);
 });
-Net.on('event',e=>{if(e.type==='release'&&barrier)barrier.raising=true;});
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);if(!phone&&window.LabView==='overview')window.LabSetView('overview');});
