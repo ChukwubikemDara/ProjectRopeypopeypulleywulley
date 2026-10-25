@@ -73,8 +73,9 @@ function climbOut(sim,c,side=1){assert.ok(sim.gesture(c,'flick',1));tick(sim,8);
 
   // fall bookkeeping: the section you fell from, landing back at the start, arms and legs pulling apart
   const pr=new Prologue();pr.reset(sim);pr.narrator.introDone=true;place(sim,c,-17,4.05);tick(sim,40);pr.tick(sim.time,progressAt);assert.equal(c.section,'ledge');
-  pr.event({type:'fall',id:c.id,m:3,x:-25,y:1},sim.time);assert.equal(pr.narrator.queue[0]?.line.id,'fall-start','falling off the ledge back to the wake-up spot');
-  pr.narrator.queue.length=0;c.arms.aim=.8;c.legs.aim=-.8;pr.tick(sim.time+9,progressAt);
+  const hush=()=>{pr.narrator.queue.length=0;pr.narrator.played.clear();pr.narrator.lastFallLine=-Infinity;pr.narrator.busyUntil=-Infinity;}; // only the cause is under test here, not the spacing
+  hush();  pr.event({type:'fall',id:c.id,m:3,x:-25,y:1},sim.time);assert.equal(pr.narrator.queue[0]?.line.id,'fall-start','falling off the ledge back to the wake-up spot');
+  pr.narrator.queue.length=0;c.arms.aim=.8;c.legs.aim=-.8;pr.tick(sim.time+9,progressAt);hush();
   pr.event({type:'fall',id:c.id,m:2,x:-17,y:4},sim.time+9);assert.equal(pr.narrator.queue[0]?.line.id,'fall-opposite','arms and legs leaning opposite ways just before the fall');
   place(sim,c,-34,1.05);c.arms.aim=c.legs.aim=0;tick(sim,40);assert.equal(c.slumped,undefined);pr.spawned(c);tick(sim,60);const slumpY=pos(c).y;pr.input(c,'legs',{aim:.6});tick(sim,90);
   assert.ok(pos(c).y>slumpY+.2,`standing up raises the body (${slumpY.toFixed(2)} -> ${pos(c).y.toFixed(2)})`);

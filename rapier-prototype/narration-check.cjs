@@ -1,6 +1,7 @@
 // Narrator edge cases: the wrong line must never play at the wrong time.
 const assert=require('node:assert/strict');
-const {Narrator,LINES,FALL_LINES,duration,setRecorded}=require('./narration.cjs');
+const {Narrator,LINES,FALL_LINES,duration,setRecorded,TIMING}=require('./narration.cjs');
+const {STALL_AFTER,FALL_QUIET,FALL_NEEDS_QUIET,LINE_GAP}=TIMING;
 const zones=[{id:'walk',x0:-28,x1:-24,y0:-1,y1:4,still:{x0:-36,x1:-21,y0:-1,y1:3.2}},{id:'ledge',x0:-23.5,x1:-21,y0:-1,y1:2.6,still:{x0:-25,x1:-20.6,y0:-1,y1:4.4}}];
 const team=(x,y,o={})=>({x,y,progress:0,moving:false,slumped:false,...o});
 // run the narrator from `from` to `to` (s), returning [{id,t}] of everything it said
@@ -37,9 +38,9 @@ function awake(){const n=new Narrator();n.reset(0);run(n,0,40,[team(-33,1)]);ass
 
 // --- stalling ----------------------------------------------------------------------------------
 {const n=awake(),end=n.busyUntil;
- assert.deepEqual(ids(run(n,40,end+34,[team(-33,1)])),[],'no "silence" line within 35 s of the narrator going quiet');
- const later=run(n,end+34,end+50,[team(-33,1)]);assert.deepEqual(ids(later),['stall'],'standing still long after the speech: the silence line');
- console.log('PASS the silence line needs 35 quiet seconds after the narrator stops, not 35 s from spawn');}
+ assert.deepEqual(ids(run(n,40,end+STALL_AFTER-1,[team(-33,1)])),[],'no "silence" line until the narrator has been quiet a long while');
+ const later=run(n,end+STALL_AFTER-1,end+STALL_AFTER+LINE_GAP+6,[team(-33,1)]);assert.deepEqual(ids(later),['stall'],'standing still long after the speech: the silence line');
+ console.log(`PASS the silence line needs ${STALL_AFTER} quiet seconds after the narrator stops, not ${STALL_AFTER} s from spawn`);}
 {const n=awake();
  assert.deepEqual(ids(run(n,40,140,[team(-33,1,{moving:true})])),[],'moving around without getting further is not "silence"');
  assert.deepEqual(ids(run(n,140,200,[team(-33,1,{slumped:true})])),[],'still slumped (nobody has picked up the legs yet) is not "silence"');
@@ -55,14 +56,18 @@ function awake(){const n=new Narrator();n.reset(0);run(n,0,40,[team(-33,1)]);ass
  const fall=(o,at)=>{const kind=n.fall({id:'a',m:2,zone:'ledge',...o},at);const said=run(n,at,at+15,[team(-20,4,{moving:true})]);return[kind,ids(said)];};
  assert.deepEqual(fall({zone:'wake'},t),['fall-first',['fall-first']]);
  t=n.busyUntil-1;assert.equal(n.fall({id:'a',m:2,zone:'gap'},t),null,'no reaction while one is still being said');
- t=n.busyUntil+3;assert.equal(n.fall({id:'a',m:2,zone:'gap'},t),null,'and none in the quiet right after it');
- t=n.busyUntil+9;assert.deepEqual(fall({zone:'gap'},t),['fall-same',['fall-same']],'same section twice in a row');
- t=n.busyUntil+9;assert.deepEqual(fall({zone:'beam',opposite:true},t),['fall-opposite',['fall-opposite']],'pulling in opposite directions wins');
- t=n.busyUntil+9;assert.deepEqual(fall({zone:'ledge',m:5},t),['fall-big',['fall-big']]);
- t=n.busyUntil+9;assert.deepEqual(fall({zone:'gap',toStart:true},t),['fall-start',['fall-start']]);
- t=n.busyUntil+9;assert.deepEqual(fall({zone:'beam'},t),['fall-again',['fall-again']]);
- t=n.busyUntil+9;assert.equal(fall({zone:'ledge'},t)[0],null,'every reaction used up (the repeatable ones wait a minute)');
+ t=n.busyUntil+FALL_NEEDS_QUIET+1;assert.equal(n.fall({id:'a',m:2,zone:'gap'},t),null,'and none for a good while after it');
+ t=n.busyUntil+FALL_QUIET+1;assert.deepEqual(fall({zone:'gap'},t),['fall-same',['fall-same']],'same section twice in a row');
+ t=n.busyUntil+FALL_QUIET+1;assert.deepEqual(fall({zone:'beam',opposite:true},t),['fall-opposite',['fall-opposite']],'pulling in opposite directions wins');
+ t=n.busyUntil+FALL_QUIET+1;assert.deepEqual(fall({zone:'ledge',m:5},t),['fall-big',['fall-big']]);
+ t=n.busyUntil+FALL_QUIET+1;assert.deepEqual(fall({zone:'gap',toStart:true},t),['fall-start',['fall-start']]);
+ t=n.busyUntil+FALL_QUIET+1;assert.deepEqual(fall({zone:'beam'},t),['fall-again',['fall-again']]);
+ t=n.busyUntil+FALL_QUIET+1;assert.equal(fall({zone:'ledge'},t)[0],null,'every reaction used up (the repeatable ones wait a minute)');
  console.log('PASS one fitting reaction per fall, never overlapping, with quiet after each');}
+{const n=awake();n.moment('combo',50);n.moment('kick',50.01);const said=run(n,50,80,[team(-2,10,{progress:1})]);
+ assert.equal(said.length>=1,true);if(said.length>1)assert.ok(said[1].t>=said[0].t+duration(LINES.find(l=>l.id===said[0].id))+LINE_GAP-.11,'silence between lines');
+ const busy=awake();busy.moment('combo',50);run(busy,50,52,[team(-20,4,{moving:true})]);assert.equal(busy.fall({id:'a',m:2,zone:'gap'},53),null,'no fall reaction right after the narrator has spoken');
+ console.log('PASS lines are spaced out, and falls right after another line get no reaction');}
 {const n=awake();n.moment('combo',50);n.fall({id:'a',m:2,zone:'gap'},50.05);
  // the combo line is being said; the fall reaction waits, and goes stale before it gets a turn
  const said=run(n,50,70,[team(-20,4,{moving:true})]);assert.deepEqual(ids(said),['fall-first']);

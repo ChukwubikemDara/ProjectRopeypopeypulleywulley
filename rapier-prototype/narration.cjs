@@ -13,7 +13,9 @@
 //  - A place line only plays if someone is still around that place when its turn comes.
 //  - Stalling means nobody got further AND nobody moved for a while, counted from when the narrator
 //    last stopped talking. Waking up, listening and waiting at the barrier never count as stalling.
-//  - One fall reaction at a time, with quiet in between; the next fall can only react once that has passed.
+//  - At least LINE_GAP seconds of silence after every line.
+//  - Falls only sometimes get a reaction: the narrator has to have been quiet for a while, and there's a
+//    long gap between fall reactions. A fall that gets no reaction is still counted (for "same spot" etc).
 //  - Once the release line starts, the narrator says nothing else.
 // To use a recording, drop <id>.mp3 (or .m4a / .wav / .ogg) into client/narration/.
 // Set `duration` (seconds) on a line when its recording runs longer than the text suggests.
@@ -36,16 +38,18 @@ const LINES=[
  {id:'release',at:{moment:'release'},essential:true,text:"Get to the top before they do.\nAnd remember: you chose this friend.\nI think that's important."},
  // falls: one reaction per fall at most, with room for the blaming in between
  {id:'fall-first',at:{moment:'fall-first'},text:"Good. You've established whose fault it was. Now you can try establishing a method."},
- {id:'fall-again',at:{moment:'fall-again'},repeat:60,text:"You're getting very good at this part. Unfortunately, this part is falling."},
- {id:'fall-same',at:{moment:'fall-same'},repeat:60,text:'Ah. Testing it again. Sensible. One failure could have been a misunderstanding.'},
- {id:'fall-opposite',at:{moment:'fall-opposite'},repeat:60,text:'You both seem to have a plan. That appears to be the problem.'},
+ {id:'fall-again',at:{moment:'fall-again'},repeat:120,text:"You're getting very good at this part. Unfortunately, this part is falling."},
+ {id:'fall-same',at:{moment:'fall-same'},repeat:120,text:'Ah. Testing it again. Sensible. One failure could have been a misunderstanding.'},
+ {id:'fall-opposite',at:{moment:'fall-opposite'},repeat:120,text:'You both seem to have a plan. That appears to be the problem.'},
  {id:'fall-big',at:{moment:'fall-big'},text:'From up there, it almost looked deliberate.'},
  {id:'fall-start',at:{moment:'fall-start'},text:"Ah, the beginning. You've been here before. Fond memories? No?"},
  {id:'stall',at:{moment:'stall'},text:'Silence. Either deep concentration, or a very quiet argument.'},
 ];
-const STALL_AFTER=35;   // s with nobody getting further...
+const STALL_AFTER=45;   // s with nobody getting further...
 const STALL_STILL=8;    // ...and nobody moving at all for the last few of them
-const FALL_QUIET=8;     // s of quiet after a fall reaction before the next one
+const FALL_QUIET=25;    // s after a fall reaction before another fall gets one
+const FALL_NEEDS_QUIET=6; // s the narrator must have been silent before reacting to a fall
+const LINE_GAP=4;       // s of silence after every line (the wake-up speech keeps its own pauses)
 const BIG_FALL=4;       // m
 // how long a line may wait in the queue before it's stale (s), by what triggered it
 // (place lines never go stale by time: they stay as long as someone is still at that place)
@@ -86,7 +90,7 @@ class Narrator{
  // a fall: {id, m, zone (where it started), opposite (arms and legs were pulling different ways), toStart}
  fall(f,time){
   const t=this.team(f.id),same=!!f.zone&&f.zone===t.lastZone;t.falls++;if(f.zone)t.lastZone=f.zone;
-  if(!this.introDone||this.closed||time-this.lastFallLine<FALL_QUIET||this.queue.some(q=>q.kind==='fall'))return null;
+  if(!this.introDone||this.closed||time-this.lastFallLine<FALL_QUIET||(this.played.size>0&&time-this.busyUntil<FALL_NEEDS_QUIET)||this.queue.some(q=>q.kind==='fall'))return null;
   const order=[f.opposite&&'fall-opposite',same&&'fall-same',f.m>=BIG_FALL&&'fall-big',f.toStart&&'fall-start','fall-first','fall-again'].filter(Boolean);
   for(const kind of order)if(this.moment(kind,time))return kind;
   return null;
@@ -129,6 +133,8 @@ class Narrator{
   // until the wake-up speech is over, only its own lines may play (even in its pauses)
   const at=this.introDone?0:this.queue.findIndex(q=>q.kind==='start'||q.kind==='after');
   if(at<0)return null;
+  // breathing room between lines, so the players get to react to each other
+  if(this.introDone&&this.played.size>0&&time<this.busyUntil+LINE_GAP)return null;
   const [{line,kind}]=this.queue.splice(at,1);this.played.set(line.id,time);this.busyUntil=time+duration(line);
   if(kind==='fall')this.lastFallLine=this.busyUntil; // quiet counts from the end of the reaction
   if(line.id==='release')this.closed=true;
@@ -139,4 +145,5 @@ class Narrator{
 }
 // the fall reactions on their own, for races
 const FALL_LINES=LINES.filter(l=>String(l.at.moment).startsWith('fall-'));
-module.exports={Narrator,LINES,FALL_LINES,duration,setRecorded,triggerOf};
+const TIMING={STALL_AFTER,STALL_STILL,FALL_QUIET,FALL_NEEDS_QUIET,LINE_GAP};
+module.exports={Narrator,LINES,FALL_LINES,duration,setRecorded,triggerOf,TIMING};
