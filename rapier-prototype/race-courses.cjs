@@ -37,5 +37,5 @@ const campus={id:'campus',biome:'campus',kind:'race',progressTolerance:2,name:'C
  signs:[{x:8,y:6.7,text:'OLD MAIN. NEW HEIGHTS.',sub:'Please use the extremely unofficial entrance.'},{x:25,y:11.6,text:'OFFICE HOURS: UPHILL',sub:'Your degree is just a few holds away.'}],
  // A student on an e-scooter waits past the flag. A quarter-second after anyone reaches the top roof they launch
  // across it at 12 m/s and fling whoever is in the way off the edge. Hop over them, or hang off the edge.
- objects:[{id:'scooter',kind:'scooter',look:'scooter',w:1.1,h:1.7,x0:36.6,x1:48.2,y:17.895,speed:3,dash:12,delay:.25,pause:.6,rest:1.2,triggerX:36,triggerY:16.4,fling:[9,5.5]}]};
+ objects:[{id:'scooter',kind:'scooter',look:'scooter',w:1.1,h:1.7,x0:37.1,x1:48.2,y:17.895,speed:3,dash:12,delay:.25,pause:.6,rest:1.2,triggerX:36,triggerY:16.4,fling:[9,5.5]}]};
 module.exports={forest,campus};
