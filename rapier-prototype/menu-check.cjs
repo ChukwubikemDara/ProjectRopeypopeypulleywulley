@@ -12,6 +12,7 @@ assert.equal(menu.hidden,false);assert.equal(maps.children[0].attrs['aria-checke
 maps.children[1].onclick();assert.equal(sent.at(-1)[0],'selectCourse');assert.equal(sent.at(-1)[1],'forest');race.onclick();assert.equal(sent.at(-1)[0],'start');prologue.onclick();assert.equal(sent.at(-1)[0],'practice');
 Net.player='guest';poll();assert.ok(race.disabled&&prologue.disabled&&maps.children.every(b=>b.disabled));
 Net.phaseKnown=false;Net.phase='lobby';poll();assert.equal(menu.hidden,true,'no menu before the server says the phase');Net.phaseKnown=true;poll();assert.equal(menu.hidden,false);
-Net.player='host';Net.phase='playing';poll();assert.equal(menu.hidden,true);assert.equal(back.hidden,false);back.onclick();assert.equal(sent.at(-1)[0],'endRound');
-Net.phase='results';poll();back.onclick();assert.equal(sent.at(-1)[0],'selectCourse');assert.equal(sent.at(-1)[1],'mountain','Results return to the same map lobby through the allowed server action');
+Net.player='host';Net.phase='playing';poll();assert.equal(menu.hidden,true);assert.equal(back.hidden,false);back.onclick();assert.equal(sent.at(-1)[0],'resetGame');
+Net.player='guest';poll();assert.equal(back.hidden,false,'any big screen can go back to the start screen');Net.player='host';
+Net.phase='results';poll();back.onclick();assert.equal(sent.at(-1)[0],'resetGame','results go back to the start screen too');
 console.log('PASS menu preserves keyboard focus, host permissions, existing race/prologue actions, and return-to-menu from play/results');

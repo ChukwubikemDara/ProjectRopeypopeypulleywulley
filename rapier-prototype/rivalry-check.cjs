@@ -3,6 +3,7 @@
 const assert=require('node:assert/strict');
 const {io}=require('socket.io-client');
 const {createServer}=require('./server.cjs');
+const {progressAt}=require('./physics.cjs');
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 const V=(x=0,y=0,z=0)=>({x,y,z});
 function place(sim,c,x,y){for(const h of c.hands)sim.release(h,'test setup');for(const o of sim.climbers.values())for(const h of o.hands)if(h.grip?.id===c.id)sim.release(h,'test setup');
@@ -51,6 +52,13 @@ function place(sim,c,x,y){for(const h of c.hands)sim.release(h,'test setup');for
    host.emit('start');await wait(300);assert.equal(state.phase,'playing');bLegs.disconnect();await wait(200);
    assert.equal(P(bArms).role,'both','the remaining rival plays arms and legs');assert.equal(state.phase,'playing','the race carries on');assert.equal(game.sim.climbers.size,2);
    console.log('PASS a rival leaving mid-race leaves the race running, and their partner plays solo');
+   // reset: a phone can't do it; any big screen can, mid-race, and it puts everyone back at the start of the same map
+   const reset=s=>new Promise(r=>s.emit('resetGame',r));const map=game.sim.course.id;
+   assert.equal((await reset(aArms)).ok,false,'a phone cannot reset the game');assert.equal(state.phase,'playing');
+   const screen2=await connect('spectator');assert.equal((await reset(screen2)).ok,true);await wait(300);
+   assert.equal(state.phase,'lobby');assert.equal(game.sim.course.id,map,'same map');assert.equal(game.sim.climbers.size,2,'teams are kept');
+   for(const c of game.sim.climbers.values()){const p=c.body.translation();assert.ok(progressAt(p.x,p.y,game.sim.course)<.1,'everyone is back at the start');}
+   console.log('PASS any big screen can reset the game to the start screen mid-race; phones cannot');
   }finally{clearInterval(heartbeat);}
  }finally{sockets.forEach(s=>s.disconnect());await game.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});
