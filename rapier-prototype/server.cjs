@@ -21,7 +21,7 @@ async function createServer({courses=Courses.all}={}){
    html=html.replace('/js/net.js','/lab/net.js').replace('/js/render3d.js','/lab/render.js').replace('/js/phone.js','/lab/phone.js').replace('<script src="/js/presentation.js"></script>','<script src="/lab/sensor-status.js"></script><script src="/lab/phone-controls.js"></script><script src="/lab/phone-lab.js"></script><script src="/lab/tutorial.js"></script>');
    html=html.replace('SNOWBOUND · PARTY CLIMBING','SNOWBOUND · THE LONG WAY UP');
    html=html.replace('<div id="comboFlash">COMBO!</div>','<div id="comboFlash">COMBO!</div><div id="hopFlash">HOP</div><div id="lagbox"></div>');
-   html=html.replace('</head>','<link rel="stylesheet" href="/lab/lab.css"><link rel="stylesheet" href="/lab/controls.css"><link rel="stylesheet" href="/lab/tutorial.css"></head>');
+   html=html.replace('</head>','<link rel="stylesheet" href="/lab/lab.css"><link rel="stylesheet" href="/lab/controls.css"><link rel="stylesheet" href="/lab/tutorial.css"><link rel="stylesheet" href="/lab/game-hud.css"></head>');
    res.send(html);
  });
  app.get('/qr.svg',async(req,res)=>{try{res.type('svg').send(await QR.toString(String(req.query.url||'').slice(0,400),{type:'svg',margin:1}));}catch{res.sendStatus(400);}});

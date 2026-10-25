@@ -19,11 +19,8 @@
  const heading=create('b',null,null,'Button controls');preferences.append(heading);
  function option(id,label,description){const row=create('label',null,'control-option'),copy=create('span'),title=create('b',null,null,label),help=create('small',null,null,description),input=create('input',id);input.type='checkbox';copy.append(title,help);row.append(copy,input);preferences.append(row);return input;}
  const attribute=(el,key,value)=>{if(el.getAttribute(key)!==String(value))el.setAttribute(key,String(value));};
- const extras=option('extraActions','Show jump + tuck buttons','Motion stays active. Kick is always available to legs / solo players.');
- const touch=option('touchAiming','Use touch aiming','Drag to aim without sensors. Includes jump and tuck buttons.');
- try{extras.checked=localStorage.getItem('tethered-extra-actions')==='true';}catch{}
- let showExtra=extras.checked;
- extras.onchange=()=>{showExtra=extras.checked;try{localStorage.setItem('tethered-extra-actions',String(extras.checked));}catch{}};
+ // Jump, tuck and kick are motion controls, so their buttons only exist in the no-sensor touch mode.
+ const touch=option('touchAiming','Use touch controls','No motion sensors? Drag to aim and tap Jump, Tuck and Kick.');
  settings.insertBefore(preferences,$('closeDebug'));
  const aimPanel=create('div','touchAim','touch-aim');
  const aimPad=create('div','touchAimPad','touch-aim-pad');aimPad.setAttribute('role','group');aimPad.setAttribute('aria-label','Drag or use arrow keys to aim hands or lean feet');aimPad.tabIndex=0;
@@ -44,12 +41,11 @@
  function frame(){
   requestAnimationFrame(frame);
   const st=Net.sample(),c=st?.climbers.find(c=>c.id===Net.me),active=!!c&&Net.calibrated&&st.phase==='playing';
-  const legs=Net.role==='legs',arms=Net.role==='arms',manual=PhoneInput.touchMode,extra=showExtra||manual;
+  const legs=Net.role==='legs',arms=Net.role==='arms',manual=PhoneInput.touchMode;
   const jump=c?.actions?.jump,kick=c?.actions?.kick,locked=PhoneInput.lockout>0;
   const courseGrip=c?.hands.some(h=>h.grip&&!h.onClimber),planted=c?.legs.some(l=>l.planted);
-  document.body.classList.toggle('touch-controls',manual);document.body.classList.toggle('extra-actions',extra);document.body.classList.toggle('legs-role',legs);document.body.classList.toggle('arms-role',arms);
-  dock.hidden=!active||arms;aimPanel.hidden=!active||!manual;extras.disabled=manual;extras.checked=extra;
-  buttons.flick.button.hidden=buttons.yank.button.hidden=!extra;
+  document.body.classList.toggle('touch-controls',manual);document.body.classList.toggle('legs-role',legs);document.body.classList.toggle('arms-role',arms);
+  dock.hidden=!active||arms||!manual;aimPanel.hidden=!active||!manual;
   buttons.flick.button.disabled=!active||arms||locked||!jump?.ready;
   buttons.yank.button.disabled=buttons.kick.button.disabled=!active||arms||locked;
   if(kick?.cooldown>0)buttons.kick.button.disabled=true;
@@ -57,13 +53,13 @@
   text(buttons.yank.sub,'Tap or squat');const kicked=PhoneInput.kickResult,recent=kicked&&performance.now()-kicked.at<900;
   text(buttons.kick.sub,recent?({kick:'Hit!','no rival nearby':'Too far',cooldown:'Recharging',lost:'No signal'}[kicked.text]||kicked.text||''):kick?.cooldown>0?`Wait ${kick.cooldown.toFixed(1)}s`:'Tap or shove');buttons.kick.button.dataset.result=recent?kicked.text:'';
   status.hidden=!active;
-  let label='Find footing',detail='Catch a course hold or land before jumping.',tone='air';
-  if(jump?.releaseNow){label=arms?'Release both hands!':'Arms: release now!';detail='Your hop is ready for a teamwork combo.';tone='combo';}
-  else if(jump?.hopNow){label=arms?'Legs: hop now!':'Hop now!';detail='Catch the release window for a combo.';tone='combo';}
-  else if(jump?.cooldown>0){label='Jump recharging';detail=arms?'Keep aiming while your legs recover.':'Aim for your next hold.';tone='wait';}
-  else if(jump?.combo){label='Hanging · Combo ready';detail=arms?'Release both pads as your legs teammate hops.':legs?'Hop as your arms teammate releases both pads.':'Hop and release both pads together.';tone='combo';}
-  else if(jump?.ready){label=planted?'Feet planted':c.grounded?'Supported':courseGrip?'Holding the course':'Jump window';detail=arms?'Legs can jump · release your pads together.':'Jump ready · hop'+(extra?' or tap Jump.':'.');tone='ready';}
-  else if(c?.hands.some(h=>h.onClimber)){label='Holding a climber';detail='A floating climber is not footing for a jump.';}
+  // Says what is true right now, never when to let go or hop: timing the combo is the challenge.
+  let label='IN THE AIR',tone='air';
+  if(jump?.cooldown>0){label='RECHARGING';tone='wait';}
+  else if(jump?.ready){label=planted?'FEET PLANTED':c.grounded?'STANDING':courseGrip?'HANGING':'READY';tone='ready';}
+  else if(c?.hands.some(h=>h.onClimber)){label='ON A CLIMBER';}
+  else if(courseGrip){label='HANGING';}
+  const detail='';
   const signature=label+'|'+detail;if(signature!==previous){text(stance,label);text(hint,detail);previous=signature;}status.dataset.tone=tone;
   for(const [i,pad]of [$('padL'),$('padR')].entries()){
    const hand=c?.hands[i],state=hand?.onClimber?'climber':hand?.grip?'gripped':hand?.target?'reachable':pad.classList.contains('closed')?'searching':'open';
@@ -72,7 +68,7 @@
    attribute(pad,'aria-label',(i?'Right':'Left')+' hand · '+description);attribute(pad,'aria-pressed',pad.classList.contains('closed'));
   }
   for(let i=0;i<2;i++){const planted=!!c?.legs[i]?.planted;text(footLabels[i],planted?'Planted':'Free');attribute(feet[i],'aria-label',(i?'Right':'Left')+' foot · '+(planted?'planted':'free'));}
-  const push=$('pushText');if(!push.parentElement.classList.contains('fire'))text(push,jump?.releaseNow?'RELEASE NOW':jump?.combo?'HOP + RELEASE':jump?.ready?'JUMP READY':'FIND FOOTING');
+  const push=$('pushText');if(!push.parentElement.classList.contains('fire'))text(push,jump?.cooldown>0?'WAIT':jump?.ready?'READY':'NO FOOTING');push.parentElement.dataset.state=jump?.cooldown>0?'wait':jump?.ready?'ready':'none';
   text($('touchAimLabel'),legs?'Drag to lean':'Drag to aim');
   const input=PhoneInput.aim;aimDot.style.left=`${50+input.aim*44}%`;aimDot.style.top=`${50-input.ay*44}%`;
  }
