@@ -58,6 +58,7 @@ export function decorateBiome(L,{mesh,puff,box,prism,mat,rock,snow,wood,dark}){
  }else{
   // Extra rock faces turn the distant sawtooth silhouettes into layered alpine peaks.
   const shades=['#9eb9c5','#afc8d0','#c3d7dc'];
-  for(let i=0;i<9;i++){const x=-10+i*9,h=12+Math.sin(i*2)*5,z=-14-(i%3)*8,r=5+(i%3),m=mesh(new THREE.ConeGeometry(r,h,9),mat(shades[i%3]),[x,h/2+3,z]);m.rotation.y=i*.7;const cap=mesh(new THREE.ConeGeometry(r*.37,h*.37,9),snow,[x,3+h*.815,z]);cap.rotation.y=m.rotation.y;}
+  for(let i=0;i<9;i++){const x=-10+i*9,h=12+Math.sin(i*2)*5,z=-14-(i%3)*8,r=5+(i%3),m=mesh(new THREE.ConeGeometry(r,h,9),mat(shades[i%3]),[x,h/2+3,z]);m.rotation.y=i*.7;const cap=mesh(new THREE.ConeGeometry(r*.37*1.06,h*.37*1.06,9),snow,[x,3+h-h*.37*1.06/2+.1,z]);// a touch larger than the peak's tip, so the two surfaces never overlap and flicker
+   cap.rotation.y=m.rotation.y;}
  }
 }

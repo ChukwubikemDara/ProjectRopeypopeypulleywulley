@@ -126,6 +126,7 @@ window.LabSetView=view=>{
 window.LabSetView(Net.phase==='playing'?'follow':'overview');
 Net.on('phase',p=>{if(!phone)window.LabSetView(p==='playing'?'follow':'overview');});
 let previous=performance.now();
+const SUN_OFFSET=new THREE.Vector3(-9,30,18),shadowToLight=new THREE.Matrix4().lookAt(SUN_OFFSET,new THREE.Vector3(),new THREE.Vector3(0,1,0)),lightToShadow=shadowToLight.clone().invert(),tempV=new THREE.Vector3();
 renderer.setAnimationLoop(now=>{
  adaptQuality(now);if(!renderer.shadowMap.autoUpdate&&frameNo++%2===0)renderer.shadowMap.needsUpdate=true;
  const dt=Math.min(.05,(now-previous)/1000);previous=now;const s=Net.sample(),seen=new Set();
@@ -160,9 +161,11 @@ renderer.setAnimationLoop(now=>{
  if(flag){const p=flag.geometry.attributes.position,base=flag.userData.base;for(let i=0;i<p.count;i++){const x=base[i*3]+.5;p.setZ(i,Math.sin(now/220-x*4)*.12*x);}p.needsUpdate=true;flag.geometry.computeVertexNormals();}
  const focus=phone?(s?.climbers.find(c=>c.id===Net.me)||s?.climbers[0]):null;
  const lightTarget=phone?new THREE.Vector3(focus?.x||0,focus?.y||1,0):controls.target;
- sun.target.position.copy(lightTarget);sun.position.copy(lightTarget).add(new THREE.Vector3(-9,30,18));
- const ext=phone?9:Math.min(40,Math.max(10,camera.position.distanceTo(lightTarget)*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*Math.max(1,camera.aspect)));
- Object.assign(sun.shadow.camera,{left:-ext,right:ext,top:ext,bottom:-ext});sun.shadow.camera.updateProjectionMatrix();
+ // Shadows crawl and shimmer when the shadow box slides or resizes smoothly with the camera, so its size moves in 4 m steps and its centre snaps to whole shadow texels.
+ const ext=phone?9:Math.min(40,Math.max(12,Math.ceil(camera.position.distanceTo(lightTarget)*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*Math.max(1,camera.aspect)/4)*4));
+ const texel=2*ext/sun.shadow.mapSize.x;tempV.copy(lightTarget).applyMatrix4(lightToShadow);tempV.x=Math.round(tempV.x/texel)*texel;tempV.y=Math.round(tempV.y/texel)*texel;tempV.applyMatrix4(shadowToLight);
+ sun.target.position.copy(tempV);sun.position.copy(tempV).add(SUN_OFFSET);
+ if(sun.shadow.camera.right!==ext){Object.assign(sun.shadow.camera,{left:-ext,right:ext,top:ext,bottom:-ext});sun.shadow.camera.updateProjectionMatrix();}
  renderer.render(scene,camera);
 });
 addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);if(!phone&&window.LabView==='overview')window.LabSetView('overview');});
