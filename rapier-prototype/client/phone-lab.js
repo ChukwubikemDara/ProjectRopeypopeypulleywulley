@@ -4,7 +4,7 @@
  document.querySelector('.stamina-wrap').hidden=false;
  const feedback=document.createElement('div');feedback.className='role-feedback';feedback.hidden=true;feedback.setAttribute('role','status');document.body.append(feedback);let feedbackUntil=0;
  function showFeedback(text){feedback.textContent=text;feedback.hidden=false;feedbackUntil=performance.now()+1800;}
- Net.on('event',e=>{if(e.id!==Net.me)return;const text={combo:'TEAMWORK COMBO!',snap:'Twig snapped! Catch another hold.',bonk:'CART HIT!',boost:'TEAM BOOST!',save:'FRIEND SAVED!',slip:'Grip lost · '+(e.reason||'catch a hold')};if(text[e.type])showFeedback(text[e.type]);});
+ Net.on('event',e=>{if(e.id!==Net.me)return;const text={combo:'TEAMWORK COMBO!',snap:'Twig snapped! Catch another hold.',bonk:e.by==='scooter'?'SCOOTERED!':'HIT BY THE BUS!',boost:'TEAM BOOST!',save:'FRIEND SAVED!',slip:'Grip lost · '+(e.reason||'catch a hold')};if(text[e.type])showFeedback(text[e.type]);});
  const sensor=window.LabSensors;document.getElementById('debug').append(document.getElementById('lagbox'));
  const sensorCard=document.createElement('div');sensorCard.className='card sensor-card';
  const heading=document.createElement('b');heading.textContent='Phone motion check';

@@ -67,9 +67,39 @@ function build(L){
  }
 
  }
+ // Odd things people lost on the mountain, used as handholds. Built at the grab point, with local +y pointing
+ // to whatever they're stuck to (the pipe roof); the grab point is always the part a hand would hold.
+ function prop(h){
+  const g=new THREE.Group(),c=k=>mat({mitten:'#5a8fd6',cuff:'#f4f3e9',plunger:'#d9473f',stick:'#c99a62',duck:'#f2c94c',beak:'#ef8a2e',pan:'#3d4752',fish:'#8fb3c4',fin:'#5f8597',canopy:'#e8664a',stripe:'#f4f3e9',shaft:'#3d4752',ski:'#e8664a',skiTop:'#f4f3e9',string:'#7a6a58',frisbee:'#ef5f8d',boot:'#f2c94c',sole:'#3d4752',bag:'#2f5d9e',bagFlap:'#5ab7c9',tyre:'#22304a',frame:'#e8664a',hand:'#2b2b2b',gold:'#c9a24a'}[k]);
+  const add=(geo,material,[x,y,z]=[0,0,0],[rx,ry,rz]=[0,0,0],[sx,sy,sz]=[1,1,1])=>{const m=mesh(geo,material,[x,y,z],g);m.rotation.set(rx,ry,rz);m.scale.set(sx,sy,sz);return m;};
+  // drawn larger than life so they read from the big screen, scaled around the grab point (so where you grab is unchanged);
+  // `roof` is in the scaled units, so whatever is stuck to the pipe roof still touches it
+  const size=h.prop==='ski'?1.2:h.wall?1.5:1.8,rod=(len,r)=>new THREE.CylinderGeometry(r,r,len,8),roof=(h.roof??.35)/size,wall=.22/size;
+  const string=()=>add(rod(roof,.012),c('string'),[0,roof/2,0]);
+  switch(h.prop){
+   case 'mitten':string();add(ball,c('mitten'),[0,-.08,0],[0,0,.2],[.13,.19,.09]);add(ball,c('mitten'),[.11,-.02,0],[0,0,-.5],[.05,.09,.06]);add(rod(.07,.11),c('cuff'),[0,.1,0]);break;
+   case 'plunger':add(new THREE.SphereGeometry(.17,16,8,0,Math.PI*2,0,Math.PI/2),c('plunger'),[0,roof,0],[Math.PI,0,0]);add(rod(roof,.025),c('stick'),[0,roof/2-.05,0]);break;
+   case 'duck':add(ball,c('duck'),[0,roof-.13,0],[0,0,0],[.2,.13,.14]);add(ball,c('duck'),[.15,roof-.26,0],[0,0,0],[.1,.1,.1]);add(new THREE.ConeGeometry(.045,.1,8),c('beak'),[.26,roof-.26,0],[0,0,-Math.PI/2]);add(rod(roof-.2,.03),c('beak'),[-.12,(roof-.2)/2,0]);break;
+   case 'pan':add(rod(.04,.24),c('pan'),[0,roof-.02,0]);add(rod(roof+.05,.03),c('pan'),[-.05,roof/2-.05,0],[0,0,.2]);break;
+   case 'fish':string();add(ball,c('fish'),[0,-.22,0],[0,0,0],[.09,.24,.07]);add(new THREE.ConeGeometry(.1,.14,4),c('fin'),[0,-.02,0],[0,Math.PI/4,0]);add(ball,c('fin'),[.04,-.36,.05],[0,0,0],[.025,.025,.025]);break;
+   case 'umbrella':add(new THREE.ConeGeometry(.36,.18,8),c('canopy'),[0,roof-.09,0],[Math.PI,0,0]);add(rod(roof,.018),c('shaft'),[0,roof/2,0]);add(new THREE.TorusGeometry(.06,.016,6,12,Math.PI),c('shaft'),[.06,-.02,0],[0,0,Math.PI]);break;
+   // wall props: built with the wall to the right (+x), `wall` metres away, and +y up
+   case 'frisbee':add(rod(.035,.22),c('frisbee'),[wall,0,0],[Math.PI/2,0,0]);add(new THREE.TorusGeometry(.2,.02,6,24),c('frisbee'),[wall,0,0]);break;
+   case 'boot':add(rod(.06,.015),c('sole'),[wall-.03,.06,0],[0,0,Math.PI/2]);add(rod(.42,.085),c('boot'),[wall*.4,-.2,0]);add(new THREE.BoxGeometry(.26,.12,.16),c('boot'),[wall*.4-.1,-.42,0]);add(new THREE.BoxGeometry(.28,.04,.17),c('sole'),[wall*.4-.1,-.49,0]);break;
+   case 'backpack':add(new THREE.TorusGeometry(.08,.018,6,14,Math.PI),c('bagFlap'),[wall*.5,.02,0]);add(rod(.06,.015),c('sole'),[wall-.03,.08,0],[0,0,Math.PI/2]);add(new RoundedBoxGeometry(.32,.38,.2,2,.07),c('bag'),[wall*.5,-.24,0]);add(new RoundedBoxGeometry(.33,.14,.21,2,.05),c('bagFlap'),[wall*.5,-.1,0]);break;
+   case 'bike':for(const y of [-.15,-.75])add(new THREE.TorusGeometry(.2,.035,6,20),c('tyre'),[wall-.28,y,0]);add(rod(.6,.02),c('frame'),[wall-.28,-.45,0]);add(rod(.36,.02),c('frame'),[wall-.18,-.4,0],[0,0,.5]);add(rod(.3,.02),c('frame'),[0,0,0],[0,0,Math.PI/2]);add(rod(.1,.02),c('sole'),[wall-.05,-.45,0],[0,0,Math.PI/2]);break;
+   case 'clockhand':add(new THREE.BoxGeometry(wall+.75,.08,.05),c('hand'),[(wall-.75)/2,0,0]);add(new THREE.ConeGeometry(.1,.2,3),c('hand'),[-.82,0,0],[0,0,Math.PI/2]);add(rod(.06,.07),c('gold'),[wall,0,0],[Math.PI/2,0,0]);break;
+   case 'ski':add(new THREE.BoxGeometry(1.6,.07,.2),c('ski'),[.62,-.02,0],[0,0,-.1]);add(new THREE.BoxGeometry(1.2,.02,.08),c('skiTop'),[.68,.03,0],[0,0,-.1]);add(new THREE.TorusGeometry(.12,.035,8,14,Math.PI/2),c('ski'),[-.16,.1,0],[0,0,Math.PI/2]);add(rod(.5,.02),c('shaft'),[.35,-.28,.12],[0,0,.35]);break;
+  }
+  g.position.set(h.x,h.y,h.z||0);g.scale.setScalar(size);
+  // pipe props hang off the pipe's roof, which is tilted with the pipe
+  if(!h.wall&&h.prop!=='ski'&&L.pipe)g.rotation.z=Math.atan2(L.pipe.normal[1],L.pipe.normal[0])-Math.PI/2;
+  g.traverse(o=>{o.castShadow=o.receiveShadow=true;});terrainGroup.add(g);return g;
+ }
  for(const [i,h]of L.holds.entries()){
    let shape;
-   if(h.kind==='handle'){shape=mesh(new THREE.TorusGeometry(.14,.035,8,20),holdMats[i%3],[h.x,h.y,h.z]);shape.rotation.y=Math.PI/2;}
+   if(h.prop)shape=prop(h);
+   else if(h.kind==='handle'){shape=mesh(new THREE.TorusGeometry(.14,.035,8,20),holdMats[i%3],[h.x,h.y,h.z]);shape.rotation.y=Math.PI/2;}
    else if(h.kind==='rung')shape=box([h.x,h.y,h.z],[.65,.09,.18],wood);
    else if(h.kind==='twig'){shape=box([h.x,h.y,h.z],[.65,.12,.18],wood.clone());shape.rotation.z=.12;}
    else shape=puff([h.x,h.y,h.z],[.17,.13,.14],holdMats[i%3]);
@@ -87,12 +117,48 @@ function build(L){
   for(let x=Math.min(...xs);x<Math.max(...xs);x+=1.3){const width=Math.min(1.3,Math.max(...xs)-x);for(const z of [-L.depth/2,L.depth/2])puff([x+width/2,top+.02,z],[width/2,.13,.6]);}
  }
  for(const o of L.objects){
-  const group=new THREE.Group();group.position.set(o.x0,o.y,0);scene.add(group);
+  const group=new THREE.Group();group.position.set(o.kind==='scooter'?o.x1:o.x0,o.y,0);scene.add(group);
   if(o.kind==='dummy'){
    const make=(g,m,p)=>mesh(g,m,p,group);make(new THREE.SphereGeometry(.22,20,14),snow,[0,.65,0]);make(new RoundedBoxGeometry(.6,.8,.5,2,.08),rust,[0,0,0]);
    for(const x of [-.08,.08])make(new THREE.SphereGeometry(.025,8,8),dark,[x,.69,.21]);
    make(new THREE.TorusGeometry(.17,.025,8,24),snow,[0,.05,.27]);make(new THREE.CylinderGeometry(.26,.26,.08,18),metal,[0,.9,0]);
    objectModels.set(o.id,{root:group,wheels:[],previousX:o.x0});continue;
+  }
+  if(o.look==='scooter'){
+   // a student on an e-scooter, headphones on, absolutely not looking where they're going. Faces the way it moves.
+   const make=(g,m,p,r=[0,0,0],sc=[1,1,1])=>{const k=mesh(g,m,p,group);k.rotation.set(...r);k.scale.set(...sc);return k;},b=-o.h/2;
+   const deck=mat('#2b2f36'),grip=mat('#4a4f57'),hoodie=mat('#1e3a6e'),jeans=mat('#3e5b86'),skin=mat('#f1c9a5'),shoe=mat('#f6f4ee'),pack=mat('#e8664a'),phones=mat('#22304a'),light=new THREE.MeshBasicMaterial({color:'#bff3ff'});
+   make(new RoundedBoxGeometry(.95,.07,.22,2,.03),deck,[0,b+.14,0]);
+   const wheels=[];for(const x of [-.42,.42]){const w=make(new THREE.CylinderGeometry(.1,.1,.08,14),grip,[x,b+.1,0],[Math.PI/2,0,0]);wheels.push(w);}
+   make(new THREE.CylinderGeometry(.025,.025,1.0,8),grip,[-.42,b+.62,0],[0,0,-.12]);make(new THREE.CylinderGeometry(.02,.02,.5,8),grip,[-.36,b+1.1,0],[Math.PI/2,0,0]);
+   make(new THREE.SphereGeometry(.05,10,8),light,[-.5,b+.55,0]);
+   for(const z of [-.08,.08]){make(new THREE.CylinderGeometry(.075,.065,.62,10),jeans,[.05,b+.5,z],[0,0,.08]);make(new RoundedBoxGeometry(.2,.08,.1,2,.03),shoe,[0,b+.21,z]);}
+   make(new RoundedBoxGeometry(.36,.52,.28,3,.1),hoodie,[0,b+1.04,0],[0,0,-.18]);
+   make(new RoundedBoxGeometry(.24,.32,.18,2,.06),pack,[.2,b+1.06,0],[0,0,-.18]);
+   for(const z of [-.12,.12])make(new THREE.CylinderGeometry(.05,.045,.4,8),hoodie,[-.2,b+1.06,z],[0,0,1.1]);
+   make(new THREE.SphereGeometry(.17,16,12),skin,[-.1,b+1.43,0]);make(new THREE.SphereGeometry(.18,16,12,0,Math.PI*2,0,Math.PI/2),hoodie,[-.08,b+1.47,0]);
+   make(new THREE.TorusGeometry(.18,.025,6,16,Math.PI),phones,[-.1,b+1.45,0],[Math.PI/2,0,0]);for(const z of [-.18,.18])make(new THREE.CylinderGeometry(.06,.06,.05,12),phones,[-.1,b+1.43,z],[Math.PI/2,0,0]);
+   objectModels.set(o.id,{root:group,wheels,previousX:o.x1,faces:true});continue;
+  }
+  if(o.look==='bus'){
+   // the White Loop: Penn State's free campus bus, which has clearly taken a wrong turn. White body, blue skirt,
+   // a row of windows and the route sign on both sides; the roof rails are the grab bars.
+   const white=mat('#f6f4ee'),blue=mat('#2f5d9e'),glass=mat('#2a3a4d'),D=2.2,make=(g,m,p)=>mesh(g,m,p,group);
+   make(new RoundedBoxGeometry(o.w,o.h,D,3,.14),white,[0,0,0]);
+   make(new RoundedBoxGeometry(o.w+.02,.2,D+.02,2,.05),blue,[0,-o.h/2+.24,0]);
+   for(const z of [-1,1]){
+    const rows=o.h>2?[o.h*.3,o.h*.02]:[.17]; // a double-decker gets two rows of windows
+    for(const y of rows)for(let i=0;i<4;i++)make(new RoundedBoxGeometry(o.w*.17,.34,.04,2,.04),glass,[-o.w*.36+i*o.w*.21,y,z*(D/2+.01)]);
+    const canvas=document.createElement('canvas');canvas.width=512;canvas.height=96;const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#151a22';ctx.fillRect(0,0,512,96);ctx.fillStyle='#ffb43a';ctx.font='900 64px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('WHITE LOOP',256,50);
+    const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;
+    const sign=make(new THREE.PlaneGeometry(o.w*.62,o.w*.62*96/512),new THREE.MeshBasicMaterial({map:tex}),[0,o.h>2?-o.h*.2:-.2,z*(D/2+.012)]);sign.rotation.y=z<0?Math.PI:0;sign.castShadow=false;
+   }
+   for(const x of [-1,1])for(const y of o.h>2?[o.h*.3,o.h*.02]:[.17])make(new RoundedBoxGeometry(.04,.3,D*.7,2,.02),glass,[x*(o.w/2+.01),y,0]);
+   const wheels=[];for(const x of [-o.w*.32,o.w*.32])for(const z of [-1.1,1.1]){const wheel=mesh(new THREE.CylinderGeometry(.26,.26,.16,18),glass,[x,-o.h/2,z],group);wheel.rotation.x=Math.PI/2;wheels.push(wheel);}
+   for(const [x,y]of o.handles){const bar=mesh(new THREE.TorusGeometry(.14,.035,8,20),glass,[x,y,0],group);bar.rotation.y=Math.PI/2;}
+   const drift=mesh(ball,snow,[0,o.h/2,0],group);drift.scale.set(o.w*.34,.08,.8);
+   objectModels.set(o.id,{root:group,wheels,previousX:o.x0});continue;
   }
   const body=box([0,0,0],[o.w,o.h,2.4],rust);terrainGroup.remove(body);group.add(body);
   const wheels=[];for(const x of [-o.w*.32,o.w*.32])for(const z of [-1.22,1.22]){const wheel=mesh(new THREE.CylinderGeometry(.2,.2,.13,16),dark,[x,-o.h/2,z],group);wheel.rotation.x=Math.PI/2;wheels.push(wheel);}
@@ -117,6 +183,25 @@ function build(L){
  for(const h of L.holds.filter(h=>h.hint==='grab')){const ring=new THREE.Mesh(new THREE.TorusGeometry(.3,.04,8,32),new THREE.MeshBasicMaterial({color:'#f2c94c'}));ring.position.set(h.x,h.y,(h.z||0)+.1);cueGroup.add(ring);cues.push({mesh:ring,kind:'grab'});}
  for(const m of L.markers||[]){const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const ctx=canvas.getContext('2d');ctx.font='900 110px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.lineWidth=14;ctx.strokeStyle='#22304a';ctx.strokeText('↑',64,68);ctx.fillStyle='#f2c94c';ctx.fillText('↑',64,68);
   const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;const arrow=new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthWrite:false}));arrow.scale.set(.9,.9,1);arrow.position.set(m.x,m.y,.3);cueGroup.add(arrow);cues.push({mesh:arrow,kind:'jump',y:m.y});}
+ // Direction arrows: small chevrons every few metres along the racing line, behind the climbers (z < 0) so they
+ // never cover anyone, pulsing gently the way to go. Spots that would sit inside rock are skipped.
+ {const chevron=new THREE.Shape([[-.2,.26],[.06,0],[-.2,-.26],[-.05,-.26],[.21,0],[-.05,.26]].map(([x,y])=>new THREE.Vector2(x,y)));
+  const fill=new THREE.MeshBasicMaterial({color:'#f2c94c',transparent:true,opacity:.85,depthWrite:false}),edge=new THREE.MeshBasicMaterial({color:'#22304a',transparent:true,opacity:.7,depthWrite:false});
+  const front=new THREE.ShapeGeometry(chevron),back=front.clone();back.scale(1.28,1.22,1);
+  const solid=(x,y)=>L.terrain.some(t=>inside(t.pts,x,y)&&inside(t.pts,x+.3,y)&&inside(t.pts,x-.3,y));
+  for(const lane of L.mirror?[1,-1]:[1]){
+   let carry=2.5;
+   for(let i=0;i<L.path.length-1;i++){
+    const [ax,ay]=L.path[i],[bx,by]=L.path[i+1],len=Math.hypot(bx-ax,by-ay),angle=Math.atan2(by-ay,(bx-ax)*lane);
+    for(let d=carry;d<len;d+=4){
+     const x=(ax+(bx-ax)*d/len)*lane,y=ay+(by-ay)*d/len;if(solid(x,y))continue;
+     const g=new THREE.Group();g.position.set(x,y,-L.depth/2+.2);g.rotation.z=angle;
+     const outline=new THREE.Mesh(back,edge);outline.position.z=-.01;const arrow=new THREE.Mesh(front,fill);g.add(outline,arrow);cueGroup.add(g);
+     cues.push({mesh:g,kind:'arrow',x,y,dx:Math.cos(angle),dy:Math.sin(angle),phase:(x+y)*.4});
+    }
+    carry=(carry-len)%4;if(carry<0)carry+=4;
+   }
+  }}
  const gate=L.terrain.find(t=>t.kind==='barrier');
  if(gate){const xs=gate.pts.map(p=>p[0]),ys=gate.pts.map(p=>p[1]),w=Math.max(...xs)-Math.min(...xs),h=Math.max(...ys)-Math.min(...ys);
   const panel=new THREE.Mesh(new THREE.BoxGeometry(w,h,L.depth*.9),wood);panel.position.set((Math.max(...xs)+Math.min(...xs))/2,(Math.max(...ys)+Math.min(...ys))/2,0);panel.castShadow=panel.receiveShadow=true;cueGroup.add(panel);barrier={mesh:panel,rise:0,raising:false};}
@@ -128,7 +213,9 @@ function build(L){
 Net.on('level',build);if(Net.level)build(Net.level);
 const isLobby=()=>Net.phase!=='playing'&&Net.phase!=='results';let menuCameraReady=false;
 function menuShot(){const portrait=camera.aspect<1,focus={snow:[14,10],forest:[14,10.5],campus:[17,10]}[level?.biome]||[14,10];return {target:new THREE.Vector3(focus[0]+(portrait?0:2),focus[1]+(portrait?2:0),-2),distance:portrait?40:31};}
-const controls=phone?null:new OrbitControls(camera,renderer.domElement);if(controls){controls.enableDamping=true;controls.target.set(25,8,0);}
+const controls=phone?null:new OrbitControls(camera,renderer.domElement);
+// screen.html?camera exposes the camera for lining up screenshots; never in normal play
+if(new URLSearchParams(location.search).has('camera'))window.LabCamera={camera,controls,THREE};if(controls){controls.enableDamping=true;controls.target.set(25,8,0);}
 window.LabSetView=view=>{
  window.LabView=view;
  if(view==='menu'&&controls&&!menuCameraReady){const {target,distance}=menuShot();controls.target.copy(target);camera.position.copy(target).add(new THREE.Vector3(2,3,distance));camera.lookAt(target);menuCameraReady=true;}
@@ -151,7 +238,7 @@ renderer.setAnimationLoop(now=>{
  if(s){
   const broken=new Set(s.broken||[]),strain=new Map(s.strain||[]);
   for(const [id,{mesh:m,data:h}]of holdModels){m.visible=!broken.has(id);if(h.kind==='twig'){m.rotation.z=.12-(strain.get(id)||0)*.5;}}
-  for(const o of s.objects||[]){const m=objectModels.get(o.id);if(!m)continue;m.root.position.set(o.x,o.y,o.z);if(o.rotation)m.root.quaternion.set(o.rotation.x,o.rotation.y,o.rotation.z,o.rotation.w);for(const w of m.wheels)w.rotation.y+=(o.x-m.previousX)/.2;m.previousX=o.x;for(const {mesh:h,data}of holdModels.values())if(data.objectId===o.id)h.position.set(o.x+data.local.x,o.y+data.local.y,o.z);}
+  for(const o of s.objects||[]){const m=objectModels.get(o.id);if(!m)continue;m.root.position.set(o.x,o.y,o.z);if(o.rotation)m.root.quaternion.set(o.rotation.x,o.rotation.y,o.rotation.z,o.rotation.w);for(const w of m.wheels)w.rotation.y+=(o.x-m.previousX)/.2;if(m.faces&&Math.abs(o.x-m.previousX)>.002)m.root.scale.x=o.x<m.previousX?1:-1;m.previousX=o.x;for(const {mesh:h,data}of holdModels.values())if(data.objectId===o.id)h.position.set(o.x+data.local.x,o.y+data.local.y,o.z);}
  }
 
  if(s)for(const c of s.climbers){
@@ -195,7 +282,7 @@ renderer.setAnimationLoop(now=>{
    const team=Net.roster.find(r=>r.id===c.id),text=(team?.members||[]).map(m=>`${m.role==='both'?'ARMS + LEGS':m.role.toUpperCase()} · ${m.name}`).join('\n');if(tag.textContent!==text)tag.textContent=text;
    tempV.set(c.x,c.y+1.5,c.z||0).project(camera);tag.style.transform=`translate(-50%,-100%) translate(${(tempV.x+1)/2*innerWidth}px,${(1-tempV.y)/2*innerHeight}px)`;tag.hidden=tempV.z>1;}
   for(const [id,tag]of roleTags)if(!seenTags.has(id)){tag.remove();roleTags.delete(id);}}
- const pulse=now/1000;for(const cue of cues){if(cue.kind==='grab'){const k=1+Math.sin(pulse*4)*.15;cue.mesh.scale.set(k,k,k);}else cue.mesh.position.y=cue.y+Math.sin(pulse*3)*.12;}
+ const pulse=now/1000;for(const cue of cues){if(cue.kind==='grab'){const k=1+Math.sin(pulse*4)*.15;cue.mesh.scale.set(k,k,k);}else if(cue.kind==='arrow'){const nudge=(Math.sin(pulse*2.4-cue.phase)+1)*.08;cue.mesh.position.x=cue.x+cue.dx*nudge;cue.mesh.position.y=cue.y+cue.dy*nudge;}else cue.mesh.position.y=cue.y+Math.sin(pulse*3)*.12;}
  if(barrier?.raising&&barrier.rise<4.5){const step=Math.min(4.5-barrier.rise,dt*2.2);barrier.rise+=step;barrier.mesh.position.y+=step;}
  renderer.render(scene,camera);
 });
