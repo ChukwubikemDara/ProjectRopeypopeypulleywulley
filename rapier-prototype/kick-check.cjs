@@ -24,5 +24,10 @@ const kick=s=>new Promise(r=>s.timeout(1000).emit('gesture','kick',1,(err,res)=>
   assert.equal(await kick(aLegs),'cooldown');console.log('PASS kick cooldown blocks an immediate second kick');
   await side(2.5);assert.equal(await kick(aLegs),'no rival nearby');assert.ok(Math.abs(b.body.linvel().x)<.5);
   console.log('PASS out-of-range kick reports "no rival nearby"');
+  // a whiffed kick still swings a real leg, so the player sees it happen
+  await side(2.5);await wait(500);a.lastKick=-10;const reach=()=>Math.max(...a.feet.map(f=>f.body.translation().x-a.body.translation().x));const before=reach();
+  assert.equal(await kick(aLegs),'no rival nearby');let peak=before;for(let i=0;i<10;i++){await wait(25);peak=Math.max(peak,reach());}
+  assert.ok(peak>before+.3,`the kicking foot swings out (${before.toFixed(2)} -> ${peak.toFixed(2)})`);
+  console.log('PASS every kick visibly swings a leg, hit or miss');
  }finally{sockets.forEach(s=>s.disconnect());await game.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -180,6 +180,9 @@ class Simulation {
     if(g==='kick'){
       if(this.time-(c.lastKick??-10)<this.config.kickCooldown){c.lastGestureResult='cooldown';return false;}
       c.lastKick=this.time;c.lastGestureResult='no rival nearby';
+      // every kick swings a real leg, so it shows on screen even when it whiffs: toward the nearest rival, else where you're leaning or heading
+      const me=c.body.translation(),near=[...this.climbers.values()].filter(o=>o!==c).map(o=>({o,dx:o.body.translation().x-me.x})).filter(r=>Math.abs(r.dx)<2.5).sort((a,b)=>Math.abs(a.dx)-Math.abs(b.dx))[0];
+      c.kickDir=near?Math.sign(near.dx)||1:Math.abs(c.legs.aim||0)>.2?Math.sign(c.legs.aim):c.heading||(this.course.mirror&&me.x>0?-1:1);c.kickUntil=this.time+.25;c.kickFoot=c.feet.find(f=>f.side===c.kickDir)||c.feet[0];
       for(const other of this.climbers.values())if(other!==c&&this.kickReach(c,other)<this.config.kickRange){
         const d=norm(sub(other.body.translation(),c.body.translation()));other.body.applyImpulse(mul(add(d,V(0,.3,0)),this.config.kickImpulse*other.body.mass()),true);const held=!(this.courseGrips(other)&&!other.braced);if(!held){this.release(other.hands.find(h=>h.grip?.kind==='hold'),'kicked');this.events.push({type:'slip',id:other.id,reason:'kicked'});}else other.stamina=Math.max(0,other.stamina-20);c.stats.kicks++;c.lastGestureResult='kick';this.events.push({type:'kick',id:c.id,target:other.id,held});
       }
@@ -242,9 +245,10 @@ class Simulation {
         f.body.resetForces(true);f.body.resetTorques(true);
         const hip=add(p,rotate(V(f.side*this.config.hipX,-this.config.hipY,0),q));
         const tucked=this.time<c.tuck,reach=this.config.legReach*(tucked?.4:1),angle=(c.legs.aim||0)*this.config.legAimDeg*Math.PI/180;
-        const target=add(hip,V(Math.sin(angle)*reach+f.side*.1,-Math.cos(angle)*reach+(tucked?.15:0),0));
+        let target=add(hip,V(Math.sin(angle)*reach+f.side*.1,-Math.cos(angle)*reach+(tucked?.15:0),0));
+           const kicking=f===c.kickFoot&&this.time<c.kickUntil;if(kicking)target=add(hip,V(c.kickDir*this.config.legReach*1.1,-this.config.legReach*.25,0));
         f.planted=!!this.footSupport(f);
-        const force=limit(sub(mul(sub(target,f.body.translation()),300),mul(sub(f.body.linvel(),velocity),15)),this.config.legStrength*weight*(f.planted?1:.4));
+        const force=limit(sub(mul(sub(target,f.body.translation()),300),mul(sub(f.body.linvel(),velocity),15)),this.config.legStrength*weight*(f.planted||kicking?1:.4));
         f.body.addForce(force,true);c.body.addForceAtPoint(mul(force,-1),hip,true);
       }
       const feetDown=this.grounded(c);
@@ -263,7 +267,7 @@ class Simulation {
         const up=rotate(V(0,1,0),q),front=rotate(V(0,0,1),q);
         c.body.addTorque(sub(add(mul(cross(up,V(0,1,0)),24),mul(cross(front,normal),7)),mul(c.body.angvel(),3)),true);
       }
-      c.peak=Math.max(c.peak,p.x);const supported=held>0||feetDown||this.below(c);if(!supported)c.airPeak=Math.max(c.airPeak??p.y,p.y);else{const fall=(c.airPeak??p.y)-p.y;if(fall>3){c.stats.biggestFall=Math.max(c.stats.biggestFall,fall);this.events.push({type:'fall',id:c.id,m:Math.round(fall)});}c.airPeak=null;}
+      c.peak=Math.max(c.peak,p.x);{const vx=c.body.linvel().x;if(Math.abs(vx)>.5)c.heading=Math.sign(vx);}const supported=held>0||feetDown||this.below(c);if(!supported)c.airPeak=Math.max(c.airPeak??p.y,p.y);else{const fall=(c.airPeak??p.y)-p.y;if(fall>3){c.stats.biggestFall=Math.max(c.stats.biggestFall,fall);this.events.push({type:'fall',id:c.id,m:Math.round(fall)});}c.airPeak=null;}
       const support=this.support(c);
       if(support&&Math.abs(velocity.y)<2&&!this.terrainColliders.some(t=>t.containsPoint(p)))c.safeSpawn=V(p.x,support.height+1.05,0);
     }

@@ -14,7 +14,7 @@
   const Motion = {
     // tuning (change live from the phone's debug panel)
     FLICK: 13,        // m/s^2 vertical jerk to count as an up / down gesture
-    KICK: 16,         // m/s^2 along the screen axis (shove away from your chest) to count as a kick
+    KICK: 13,         // m/s^2 shove away from your chest (along the ground) to count as a kick
     LOCKOUT: 450,     // ms after a gesture where we ignore the bounce-back
     STILL: 1.6,       // movement energy below this = braced
     TILT_X: 30,       // degrees of left/right tilt for full aim
@@ -81,8 +81,12 @@
 
     const t = performance.now();
     if (t < Motion._lock) return;
-    // shove along the screen's axis (away from your chest) that isn't mostly vertical = kick
-    if (Math.abs(a.z) > Motion.KICK && Math.abs(a.z) > Math.abs(v) * 1.5) return fire('kick', t, Math.abs(a.z) / Motion.KICK);
+    // shove away from your chest = kick. "Away" is the phone's top edge minus its screen normal, flattened
+    // onto the ground, so it works however far back the phone is tilted (upright, 45 degrees, nearly flat).
+    // Measuring only along the screen normal missed every kick unless the phone was held perfectly upright.
+    const up = (g.y - g.z) / gl, fy = 1 - up * g.y / gl, fz = -1 - up * g.z / gl, fx = -up * g.x / gl, fl = Math.hypot(fx, fy, fz);
+    const shove = fl > 0.3 ? Math.abs((a.x * fx + a.y * fy + a.z * fz) / fl) : 0;
+    if (shove > Motion.KICK && shove > Math.abs(v) * 1.5) return fire('kick', t, shove / Motion.KICK);
     if (v > Motion.FLICK) fire('flick', t, v / Motion.FLICK);
     else if (v < -Motion.FLICK) fire('yank', t, -v / Motion.FLICK);
   }
