@@ -38,6 +38,12 @@ function place(sim,c,x,y){for(const h of c.hands)sim.release(h,'test setup');for
   clearInterval(hurry);for(let i=0;i<120&&state.mode!=='race';i++)await wait(100);
   assert.equal(state.mode,'race');assert.equal(state.courseId,'mountain');assert.equal(state.phase,'playing');
   console.log('PASS the barrier releases everyone into the selected race once the last line ends');
+  // races reuse the fall reactions: a fall reaches every phone as narration; bots never trigger it
+  const before=narrated.length;const bot=[...game.teams.values()].find(t=>t.bot);
+  if(bot)game.sim.events.push({type:'fall',id:bot.id,m:6,x:5,y:1});
+  game.sim.events.push({type:'fall',id:team,m:6,x:12,y:3});await wait(300);
+  assert.deepEqual(narrated.slice(before).map(l=>l.id),['fall-big'],'a big fall in the race gets one reaction');
+  console.log('PASS races reuse the fall reactions');
   host.emit('practice');await wait(100);assert.equal(state.mode,'practice');
   legs.emit('start');await wait(60);assert.equal(state.mode,'practice');host.emit('start');await wait(100);assert.equal(state.mode,'race');assert.equal(state.courseId,'mountain');
   host.emit('endRound');await wait(60);for(let i=0;i<8;i++){const id=i%2?'mountain':'forest';assert.equal((await select(host,id)).ok,true);assert.equal(game.sim.course.id,id);assert.equal(game.sim.climbers.size,1);}

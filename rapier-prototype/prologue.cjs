@@ -1,8 +1,14 @@
 // Runs the prologue around the narrator: the wake-up slump, which section each team is in, falls,
 // arrivals at the start platform, and the barrier that releases everyone into the race.
-const {Narrator,duration}=require('./narration.cjs');
+// RaceVoice reuses the fall reactions during races.
+const {Narrator,FALL_LINES,duration}=require('./narration.cjs');
 const OPPOSED_WINDOW=1.5; // s: arms and legs pulling different ways this recently counts as "opposite"
 const WAIT_LIMIT=40;      // s after the first team arrives before the barrier goes up anyway
+const MOVING=.35;         // m/s: slower than this counts as standing still
+
+// arms tilting one way while the legs lean the other
+function trackOpposition(c,time){if(Math.abs(c.arms.aim||0)>.35&&Math.abs(c.legs.aim||0)>.35&&Math.sign(c.arms.aim)!==Math.sign(c.legs.aim))c.opposedAt=time;}
+const opposed=(c,time)=>time-(c.opposedAt??-10)<OPPOSED_WINDOW;
 
 class Prologue{
  constructor(narrator=new Narrator()){this.narrator=narrator;this.reset(null);}
@@ -19,11 +25,12 @@ class Prologue{
  finished(c){const p=c.body.translation(),f=this.sim.course.finish;return p.y>=f.y-.3&&Math.abs(p.x)<=Math.abs(f.zoneX);}
  // events from the physics step
  event(ev,time){
+  if(ev.type==='kick'){const c=this.sim.climbers.get(ev.id);if(c&&this.finished(c))this.narrator.observe(ev,time);return;} // kicking only means something while waiting at the barrier
   this.narrator.observe(ev,time);
   if(ev.type!=='fall')return;
   const c=this.sim.climbers.get(ev.id);if(!c||c.bot)return;
   const from=c.section,landed=this.section(ev.x);
-  this.narrator.fall({id:c.id,m:ev.m,zone:from,opposite:time-(c.opposedAt??-10)<OPPOSED_WINDOW,toStart:landed==='wake'&&from&&from!=='wake'},time);
+  this.narrator.fall({id:c.id,m:ev.m,zone:from,opposite:opposed(c,time),toStart:landed==='wake'&&!!from&&from!=='wake'},time);
  }
  // called every server tick while the prologue is playing; returns what the server should do
  tick(time,progressAt){
@@ -31,19 +38,32 @@ class Prologue{
   for(const c of climbers){
    const p=c.body.translation();
    if(this.sim.grounded(c)||c.hands.some(h=>h.grip))c.section=this.section(p.x);
-   if(Math.abs(c.arms.aim)>.35&&Math.abs(c.legs.aim||0)>.35&&Math.sign(c.arms.aim)!==Math.sign(c.legs.aim))c.opposedAt=time;
+   trackOpposition(c,time);
    if(this.finished(c)){
     this.firstArrival??=time;
     this.narrator.arrive({id:c.id,teams:climbers.length,waiting:climbers.some(o=>o!==c&&!this.finished(o))},time);
    }
   }
-  const everyone=climbers.length&&climbers.every(c=>this.finished(c));
+  const everyone=climbers.length>0&&climbers.every(c=>this.finished(c));
   if(!this.releasing&&this.firstArrival!==null&&(everyone||time-this.firstArrival>WAIT_LIMIT))this.releasing=true;
   if(this.releasing&&this.releaseEndsAt===null)this.narrator.moment('release',time,false); // no-op while it's already queued
-  const line=this.narrator.tick(time,climbers.map(c=>{const p=c.body.translation();return{x:this.fold(p.x),y:p.y,progress:progressAt(p.x,p.y,this.sim.course)};}),this.sim.course.zones);
+  const line=this.narrator.tick(time,climbers.map(c=>{const p=c.body.translation(),v=c.body.linvel();
+   return{x:this.fold(p.x),y:p.y,progress:progressAt(p.x,p.y,this.sim.course),moving:Math.hypot(v.x,v.y)>MOVING,slumped:!!c.slumped};}),this.sim.course.zones);
   if(line){out.say=line;if(line.id==='release'){out.release=true;this.releaseEndsAt=time+duration(line);}}
   if(this.releaseEndsAt!==null&&!this.raceStarted&&time>=this.releaseEndsAt+.8){this.raceStarted=true;out.startRace=true;}
   return out;
  }
 }
-module.exports={Prologue};
+
+// During races the narrator only reacts to falls, with the same rules (one at a time, quiet in between).
+class RaceVoice{
+ constructor(){this.narrator=new Narrator(FALL_LINES);this.reset(null);}
+ reset(sim){this.sim=sim;this.narrator.reset(sim?.time||0);}
+ event(ev,time,progressAt){
+  if(ev.type!=='fall')return;
+  const c=this.sim?.climbers.get(ev.id);if(!c||c.bot)return;
+  this.narrator.fall({id:c.id,m:ev.m,zone:null,opposite:opposed(c,time),toStart:progressAt(ev.x,ev.y,this.sim.course)<.06},time);
+ }
+ tick(time){for(const c of this.sim.climbers.values())if(!c.bot)trackOpposition(c,time);return this.narrator.tick(time,[],[]);}
+}
+module.exports={Prologue,RaceVoice};

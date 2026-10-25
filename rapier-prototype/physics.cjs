@@ -203,6 +203,7 @@ class Simulation {
     return !this.world.castRay(new R.Ray(from,norm(d)),Math.max(0,distance-.12),true,R.QueryFilterFlags.EXCLUDE_DYNAMIC,0xffff0001);
   }
   recover(c){
+    c.airPeak=null;c.supportY=null; // a teleport is not a fall
     for(const h of c.hands)this.release(h,'recovered');
     for(const o of this.climbers.values())for(const h of o.hands)if(h.grip?.kind==='climber'&&h.grip.id===c.id)this.release(h,'recovered');
     const p=c.safeSpawn||V(1,1.05,0);
@@ -270,7 +271,9 @@ class Simulation {
         const up=rotate(V(0,1,0),q),front=rotate(V(0,0,1),q);
         c.body.addTorque(sub(add(mul(cross(up,V(0,1,0)),24),mul(cross(front,normal),7)),mul(c.body.angvel(),3)),true);
       }
-      c.peak=Math.max(c.peak,p.x);{const vx=c.body.linvel().x;if(Math.abs(vx)>.5)c.heading=Math.sign(vx);}const supported=held>0||feetDown||this.below(c);if(!supported)c.airPeak=Math.max(c.airPeak??p.y,p.y);else{const fall=(c.airPeak??p.y)-p.y;if(fall>(this.course.fallEvent??3)){c.stats.biggestFall=Math.max(c.stats.biggestFall,fall);this.events.push({type:'fall',id:c.id,m:Math.round(fall*10)/10,x:p.x,y:p.y});}c.airPeak=null;}
+      c.peak=Math.max(c.peak,p.x);{const vx=c.body.linvel().x;if(Math.abs(vx)>.5)c.heading=Math.sign(vx);}const supported=held>0||feetDown||this.below(c);
+      // a fall is height actually lost since you last stood or hung on something; a hop that lands back where it started isn't one
+      if(!supported)c.airPeak=Math.max(c.airPeak??p.y,p.y);else{const fall=(c.supportY??p.y)-p.y;if(c.airPeak!==null&&fall>(this.course.fallEvent??3)){c.stats.biggestFall=Math.max(c.stats.biggestFall,fall);this.events.push({type:'fall',id:c.id,m:Math.round(fall*10)/10,x:p.x,y:p.y});}c.airPeak=null;c.supportY=p.y;}
       const support=this.support(c);
       if(support&&Math.abs(velocity.y)<2&&!this.terrainColliders.some(t=>t.containsPoint(p)))c.safeSpawn=V(p.x,support.height+1.05,0);
     }

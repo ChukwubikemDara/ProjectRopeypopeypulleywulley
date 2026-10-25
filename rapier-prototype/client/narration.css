@@ -29,3 +29,5 @@
 .role-tag{position:fixed;z-index:12;left:0;top:0;white-space:pre;text-align:center;pointer-events:none;padding:4px 10px;border:3px solid #22304a;border-radius:10px;
  background:#fff9ec;color:#22304a;font:400 15px/1.3 'Lilita One','Arial Rounded MT Bold',system-ui,sans-serif;letter-spacing:.6px}
 .role-tag[hidden]{display:none}
+.narration-toggle.needs-tap{background:#f2c94c;opacity:1;animation:tapMe 1s ease-in-out infinite alternate}
+@keyframes tapMe{to{transform:scale(1.08)}}

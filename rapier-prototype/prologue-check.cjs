@@ -72,12 +72,25 @@ function climbOut(sim,c,side=1){assert.ok(sim.gesture(c,'flick',1));tick(sim,8);
   console.log('PASS prologue: the right lane mirrors the left');
 
   // fall bookkeeping: the section you fell from, landing back at the start, arms and legs pulling apart
-  const pr=new Prologue();pr.reset(sim);place(sim,c,-17,4.05);tick(sim,40);pr.tick(sim.time,progressAt);assert.equal(c.section,'ledge');
+  const pr=new Prologue();pr.reset(sim);pr.narrator.introDone=true;place(sim,c,-17,4.05);tick(sim,40);pr.tick(sim.time,progressAt);assert.equal(c.section,'ledge');
   pr.event({type:'fall',id:c.id,m:3,x:-25,y:1},sim.time);assert.equal(pr.narrator.queue[0]?.line.id,'fall-start','falling off the ledge back to the wake-up spot');
   pr.narrator.queue.length=0;c.arms.aim=.8;c.legs.aim=-.8;pr.tick(sim.time+9,progressAt);
   pr.event({type:'fall',id:c.id,m:2,x:-17,y:4},sim.time+9);assert.equal(pr.narrator.queue[0]?.line.id,'fall-opposite','arms and legs leaning opposite ways just before the fall');
   place(sim,c,-34,1.05);c.arms.aim=c.legs.aim=0;tick(sim,40);assert.equal(c.slumped,undefined);pr.spawned(c);tick(sim,60);const slumpY=pos(c).y;pr.input(c,'legs',{aim:.6});tick(sim,90);
   assert.ok(pos(c).y>slumpY+.2,`standing up raises the body (${slumpY.toFixed(2)} -> ${pos(c).y.toFixed(2)})`);
   console.log('PASS prologue: falls are attributed to the right section and cause; the slumped body stands up when the legs move');
+
+  // what counts as a fall: real height lost, not a hop, not a teleport
+  place(sim,c,-33,1.05);tick(sim,60);sim.events.length=0;assert.ok(sim.gesture(c,'flick',1.15));tick(sim,200);
+  assert.equal(sim.events.filter(e=>e.type==='fall').length,0,'a big hop that lands where it started is not a fall');
+  place(sim,c,-17,4.05);tick(sim,60);sim.events.length=0;c.arms.aim=-.9;sim.gesture(c,'flick',1);tick(sim,30);tick(sim,200);
+  assert.ok(sim.events.some(e=>e.type==='fall'),'hopping off the ledge to the ground below is a fall');
+  place(sim,c,-9.8,6.65);tick(sim,60);sim.events.length=0;sim.practiceStation(c,{x:-33,y:1.05});tick(sim,120);
+  assert.equal(sim.events.filter(e=>e.type==='fall').length,0,'a section reset down to a lower spot is not a fall');
+  // kicks only count while waiting at the barrier
+  const pk=new Prologue();pk.reset(sim);pk.narrator.introDone=true;place(sim,c,-17,4.05);tick(sim,20);pk.event({type:'kick',id:c.id,target:'x'},sim.time);
+  assert.equal(pk.narrator.queue.length,0,'a kick on the course is not the waiting-at-the-barrier joke');
+  place(sim,c,-2.5,10.85);tick(sim,30);pk.event({type:'kick',id:c.id,target:'x'},sim.time);assert.equal(pk.narrator.queue[0]?.line.id,'kick-wait','a kick at the barrier is');
+  console.log('PASS prologue: hops and resets are not falls; real drops are; kicks only count at the barrier');
  }finally{sim.free();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -25,7 +25,7 @@
  function finish(){clearTimeout(timer);playing=null;bar.classList.remove('show');timer=setTimeout(next,350);}
  function speak(line,done){
   if(!canSpeak)return done(false);
-  const u=new SpeechSynthesisUtterance(line.text);u.lang='en-US';u.rate=.95;u.pitch=.9;u.onend=()=>done(true);u.onerror=()=>done(false);synth.cancel();synth.speak(u);
+  const u=new SpeechSynthesisUtterance(line.text);u.lang='en-US';u.rate=.95;u.pitch=.9;u.onend=()=>done(true);u.onerror=e=>{if(e?.error==='not-allowed')blocked();done(false);};synth.cancel();synth.speak(u);
  }
  function next(){
   if(playing||!queue.length)return;
@@ -39,14 +39,25 @@
   setTimeout(()=>{minDone=true;maybeFinish();},Math.max(1500,(line.duration||3)*1000));
   if(soundDone)return;
   const fallback=()=>speak(line,()=>{soundDone=true;maybeFinish();});
-  if(line.audio){sound=new Audio(line.audio);sound.onended=()=>{sound=null;soundDone=true;maybeFinish();};sound.onerror=()=>{sound=null;fallback();};sound.play().catch(()=>{sound=null;fallback();});}
+  if(line.audio){sound=new Audio(line.audio);sound.onended=()=>{sound=null;soundDone=true;maybeFinish();};sound.onerror=()=>{sound=null;fallback();};sound.play().catch(err=>{sound=null;if(err?.name==='NotAllowedError')blocked();fallback();});}
   else fallback();
  }
- function clear(){queue.length=0;stopSound();clearTimeout(timer);playing=null;bar.classList.remove('show');bar.hidden=true;}
- Net.socket.on('narrate',line=>{if(!line?.text)return;queue.push(line);if(queue.length>3)queue.shift();next();});
- Net.on('level',clear);Net.on('disconnect',clear);
+ // `keepEssential`: the release line finishes even though the race map loads right after it
+ function clear(keepEssential){queue.length=0;if(keepEssential&&playing?.essential)return;stopSound();clearTimeout(timer);playing=null;bar.classList.remove('show');bar.hidden=true;}
+ Net.socket.on('narrate',line=>{
+  if(!line?.text||playing?.id===line.id||queue.some(q=>q.id===line.id))return;
+  queue.push(line);
+  // too much waiting: drop the oldest optional line, never an essential one
+  while(queue.length>3){const i=queue.findIndex(q=>!q.essential);if(i<0)break;queue.splice(i,1);}
+  next();
+ });
+ Net.on('level',()=>clear(true));Net.on('disconnect',()=>clear(false));
+ Net.on('phase',p=>{if(p!=='playing')clear(false);});
+ // browsers block sound until the page is touched: say so on the big screen, and unlock on the first click
+ function blocked(){if(!phone&&voiced){toggle.textContent='🔇 Click for sound';toggle.classList.add('needs-tap');}}
+ document.addEventListener('pointerdown',()=>{if(toggle.classList.contains('needs-tap')){toggle.classList.remove('needs-tap');label();}},{capture:true});
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')stopSound();});
- setInterval(()=>{const prologue=Net.level?.kind==='practice'&&Net.phase==='playing';document.body.classList.toggle('practice-mode',prologue);back.hidden=!phone||!prologue||!Net.calibrated;if(!prologue&&(queue.length||playing))clear();},250);
+ setInterval(()=>{const prologue=Net.level?.kind==='practice'&&Net.phase==='playing';document.body.classList.toggle('practice-mode',prologue);back.hidden=!phone||!prologue||!Net.calibrated;},250);
  // Waking up in the prologue: each phone gets a big card saying which half of the body it is.
  const card=make('div','role-card-flash');card.hidden=true;card.setAttribute('role','status');const cardRole=make('b'),cardHow=make('small');card.append(make('span',null,'YOU ARE THE'),cardRole,cardHow);
  if(phone)document.body.append(card);let cardFor=null;

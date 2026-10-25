@@ -16,12 +16,19 @@ function uiHarness(){
  // narration: captions always; voice off by default on phones; recordings first, synthesized voice as fallback
  const quiet=uiHarness();quiet.load('narration.js');quiet.inbound('narrate',{id:'intro',text:'Two of you. One body.',audio:null,duration:3});
  const caption=quiet.created.find(n=>n.className==='narration-text');assert.equal(caption.textContent,'Two of you. One body.');console.log('PASS captions show without any speech support');
- const setup=saved=>{const h=uiHarness();h.spoken=[];h.played=[];h.canceled=0;h.ctx.speechSynthesis={speak:u=>h.spoken.push(u.text),cancel:()=>h.canceled++};h.ctx.SpeechSynthesisUtterance=class{constructor(text){this.text=text;}};
+ const setup=saved=>{const h=uiHarness();h.ctx.clearTimeout??=()=>{};h.spoken=[];h.played=[];h.canceled=0;h.ctx.speechSynthesis={speak:u=>h.spoken.push(u.text),cancel:()=>h.canceled++};h.ctx.SpeechSynthesisUtterance=class{constructor(text){this.text=text;}};
   h.ctx.Audio=class{constructor(src){h.played.push(src);}play(){return Promise.reject(new Error('missing file'));}pause(){}};h.ctx.localStorage={getItem:()=>saved,setItem(){}};h.load('narration.js');h.toggle=h.created.find(n=>n.className==='narration-toggle');return h;};
  const quietPhone=setup(null);quietPhone.inbound('narrate',{id:'step',text:'Up one whole step.',audio:null,duration:2});
  assert.equal(quietPhone.spoken.length,0,'phones stay quiet unless voice is switched on');assert.equal(quietPhone.toggle.textContent,'Narrator voice: off');
  quietPhone.toggle.onclick();assert.equal(quietPhone.toggle.textContent,'Narrator voice: on');
  const voice=setup('true');voice.inbound('narrate',{id:'wall',text:'Too tall to hop.',audio:'/lab/narration/wall.mp3',duration:2});await new Promise(r=>setTimeout(r,10));
  assert.deepEqual(voice.played,['/lab/narration/wall.mp3'],'the recording is tried first');assert.deepEqual(voice.spoken,['Too tall to hop.'],'a missing recording falls back to the synthesized voice');
- voice.toggle.onclick();assert.ok(voice.canceled>0,'muting stops the voice');console.log('PASS voice is opt-in on phones, recordings play first, and a missing file falls back to speech');
+ voice.toggle.onclick();assert.ok(voice.canceled>0,'muting stops the voice');
+ // the caption queue: duplicates ignored, the release line never dropped, cleared when the round ends
+ const q=setup(null);const say=(id,o={})=>q.inbound('narrate',{id,text:id+' text',audio:null,duration:2,...o});
+ say('wake');say('wake');assert.equal(q.ctx.Narration.queue.length,0,'a repeated line is ignored (the first is playing)');
+ say('release',{essential:true});for(const id of ['a','b','c','d','e'])say(id);
+ assert.ok(q.ctx.Narration.queue.some(l=>l.id==='release'),'a full caption queue never drops the release line');assert.ok(q.ctx.Narration.queue.length<=3);
+ q.inbound('phase','playing');q.inbound('phase','lobby');assert.equal(q.ctx.Narration.queue.length,0);assert.equal(q.ctx.Narration.playing,null,'returning to the menu clears the narration');
+ console.log('PASS the caption queue ignores repeats, keeps the release line and clears when the round ends');console.log('PASS voice is opt-in on phones, recordings play first, and a missing file falls back to speech');
 })().catch(e=>{console.error(e);process.exitCode=1;});

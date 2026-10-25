@@ -5,6 +5,16 @@
 //   zone       the first time any climber reaches a place (zones live in the course)
 //   moment     something happened: combo, kick, stall, fall-*, arrive-*, release
 // A `\n` in the text splits it into separate captions; one recording covers the whole line.
+//
+// Rules that keep the voice from saying the wrong thing at the wrong time:
+//  - The wake-up speech (wake -> roles -> stand-up) always plays first and in order. Until it has
+//    finished, nothing reacts to falls, combos or stalls. "Go on. Stand up." is skipped if everyone is up.
+//  - Each line has a freshness limit: a reaction that had to wait too long is dropped, never played late.
+//  - A place line only plays if someone is still around that place when its turn comes.
+//  - Stalling means nobody got further AND nobody moved for a while, counted from when the narrator
+//    last stopped talking. Waking up, listening and waiting at the barrier never count as stalling.
+//  - One fall reaction at a time, with quiet in between; the next fall can only react once that has passed.
+//  - Once the release line starts, the narrator says nothing else.
 // To use a recording, drop <id>.mp3 (or .m4a / .wav / .ogg) into client/narration/.
 // Set `duration` (seconds) on a line when its recording runs longer than the text suggests.
 const LINES=[
@@ -33,63 +43,100 @@ const LINES=[
  {id:'fall-start',at:{moment:'fall-start'},text:"Ah, the beginning. You've been here before. Fond memories? No?"},
  {id:'stall',at:{moment:'stall'},text:'Silence. Either deep concentration, or a very quiet argument.'},
 ];
-const STALL_AFTER=35;   // seconds without anyone getting further
-const STALE_AFTER=8;    // a place line still waiting this long is dropped: the moment has passed
-const FALL_QUIET=8;     // seconds between fall reactions
-const BIG_FALL=4;       // metres
+const STALL_AFTER=35;   // s with nobody getting further...
+const STALL_STILL=8;    // ...and nobody moving at all for the last few of them
+const FALL_QUIET=8;     // s of quiet after a fall reaction before the next one
+const BIG_FALL=4;       // m
+// how long a line may wait in the queue before it's stale (s), by what triggered it
+// (place lines never go stale by time: they stay as long as someone is still at that place)
+const FRESH={zone:Infinity,fall:5,combo:6,kick:6,arrive:25,stall:4,release:Infinity,start:Infinity,after:Infinity};
+const INTRO=['wake','roles','stand-up'];
 
-const duration=line=>line.duration??1.4+line.text.split(/\s+/).length*.38+line.text.split('\n').length*.4;
+// Recordings can run longer than the text suggests; the server fills this from client/narration/durations.json.
+let recorded={};
+const setRecorded=map=>{recorded=map&&typeof map==='object'?map:{};};
+const duration=line=>recorded[line.id]??line.duration??1.4+line.text.split(/\s+/).length*.38+line.text.split('\n').length*.4;
+const triggerOf=line=>line.at.zone!==undefined?'zone':line.at.start!==undefined?'start':line.at.after!==undefined?'after':line.at.moment==='release'?'release':String(line.at.moment).startsWith('fall')?'fall':String(line.at.moment).startsWith('arrive')?'arrive':line.at.moment;
+const inside=(c,z,pad=0)=>c.x>=z.x0-pad&&c.x<=z.x1+pad&&c.y>=z.y0-pad&&c.y<=z.y1+pad;
 
 class Narrator{
- constructor(lines=LINES){this.lines=lines;this.reset(0);}
- reset(time){this.played=new Map();this.queue=[];this.later=[];this.busyUntil=time;this.startedAt=time;this.best=0;this.bestAt=time;this.lastFallLine=-Infinity;this.teams=new Map();this.arrivals=0;}
+ constructor(lines=LINES){this.lines=lines;this.intro=lines.some(l=>INTRO.includes(l.id));this.reset(0);}
+ reset(time){
+  this.played=new Map();this.queue=[];this.later=[];this.busyUntil=time;this.startedAt=time;this.closed=false;this.introDone=!this.intro;
+  this.best=0;this.progressAt=time;this.movedAt=time;this.lastFallLine=-Infinity;this.teams=new Map();this.arrivals=0;
+ }
  can(line,time){const last=this.played.get(line.id);return last===undefined||(line.repeat!==undefined&&time-last>=line.repeat);}
  enqueue(line,time,urgent){
-  if(!line||!this.can(line,time)||this.queue.some(q=>q.line===line))return false;
-  const item={line,since:time};urgent?this.queue.unshift(item):this.queue.push(item);
-  // too much to say: drop the newest optional line (the release line is never optional)
-  while(this.queue.length>3){const i=this.queue.findLastIndex(q=>!q.line.essential);if(i<0)break;this.queue.splice(i,1);}
+  if(!line||this.closed||!this.can(line,time)||this.queue.some(q=>q.line===line))return false;
+  const kind=triggerOf(line);
+  // during the wake-up speech, only the speech itself (and the place lines, which wait their turn) may queue
+  if(!this.introDone&&!['start','after','zone'].includes(kind))return false;
+  const item={line,since:time,kind};urgent?this.queue.unshift(item):this.queue.push(item);
+  // too much to say: drop the newest optional line (the wake-up speech and the release line are never optional)
+  while(this.queue.length>3){const i=this.queue.findLastIndex(q=>!q.line.essential&&!['start','after'].includes(q.kind));if(i<0)break;this.queue.splice(i,1);}
   return this.queue.includes(item);
  }
  moment(kind,time,urgent=true){return this.enqueue(this.lines.find(l=>l.at.moment===kind&&this.can(l,time)),time,urgent);}
  team(id){if(!this.teams.has(id))this.teams.set(id,{falls:0,lastZone:null,arrived:false});return this.teams.get(id);}
- // physics events
+ // physics events (the caller decides which kicks count)
  observe(ev,time){
   if(ev.type==='combo')this.moment('combo',time);
   else if(ev.type==='kick'&&!ev.practice)this.moment('kick',time);
  }
  // a fall: {id, m, zone (where it started), opposite (arms and legs were pulling different ways), toStart}
  fall(f,time){
-  const t=this.team(f.id),same=f.zone&&f.zone===t.lastZone;t.falls++;t.lastZone=f.zone||t.lastZone;
-  if(time-this.lastFallLine<FALL_QUIET)return null;
+  const t=this.team(f.id),same=!!f.zone&&f.zone===t.lastZone;t.falls++;if(f.zone)t.lastZone=f.zone;
+  if(!this.introDone||this.closed||time-this.lastFallLine<FALL_QUIET||this.queue.some(q=>q.kind==='fall'))return null;
   const order=[f.opposite&&'fall-opposite',same&&'fall-same',f.m>=BIG_FALL&&'fall-big',f.toStart&&'fall-start','fall-first','fall-again'].filter(Boolean);
-  for(const kind of order)if(this.moment(kind,time)){this.lastFallLine=time;return kind;}
+  for(const kind of order)if(this.moment(kind,time))return kind;
   return null;
  }
  // a team reached the start platform: {id, teams (how many are racing), waiting (others still climbing)}
  arrive(a,time){
+  // the caller repeats this every tick while the team is up there, so an arrival during the wake-up speech is just counted later
+  if(!this.introDone||this.closed)return;
   const t=this.team(a.id);if(t.arrived)return;t.arrived=true;this.arrivals++;
   if(this.arrivals===1)this.moment(a.teams>1?'arrive-first':'arrive-alone',time,false);
   else if(a.waiting)this.moment('arrive-early',time,false);
   if(t.falls===0)this.moment('arrive-clean',time,false);
  }
- // climbers: [{x,y,progress}] (x already folded onto the left lane for mirrored courses). Returns the line to say now, or null.
+ // climbers: [{x,y,progress,moving,slumped}] (x folded onto the left lane for mirrored courses).
+ // zones: [{id,x0,x1,y0,y1,still?}] where `still` is the area that keeps the line relevant.
+ // Returns the line to say now, or null.
  tick(time,climbers,zones=[]){
+  if(this.closed)return null;
   const start=this.lines.find(l=>l.at.start!==undefined);
   if(start&&time-this.startedAt>=start.at.start)this.enqueue(start,time);
-  for(const later of this.later.filter(l=>time>=l.at))this.enqueue(later.line,time);
+  // chained lines go straight to the front: the speech they continue isn't finished yet
+  for(const later of this.later.filter(l=>time>=l.at))this.enqueue(later.line,time,true);
   this.later=this.later.filter(l=>time<l.at);
-  for(const z of zones)if(climbers.some(c=>c.x>=z.x0&&c.x<=z.x1&&c.y>=z.y0&&c.y<=z.y1))this.enqueue(this.lines.find(l=>l.at.zone===z.id),time);
+  for(const z of zones)if(climbers.some(c=>inside(c,z)))this.enqueue(this.lines.find(l=>l.at.zone===z.id),time);
+  // stalling: nobody further along, nobody moving, nobody waking up, nobody waiting at the barrier, narrator quiet
   const best=Math.max(0,...climbers.map(c=>c.progress||0));
-  if(best>this.best+.01){this.best=best;this.bestAt=time;}
-  // waiting at the barrier isn't stalling
-  else if(climbers.length&&this.best<.99&&time-this.bestAt>STALL_AFTER){this.bestAt=time;this.moment('stall',time,false);}
-  this.queue=this.queue.filter(q=>q.line.at.zone===undefined||time-q.since<STALE_AFTER);
+  if(best>this.best+.01){this.best=best;this.progressAt=time;}
+  if(climbers.some(c=>c.moving||c.slumped))this.movedAt=time;
+  const quietSince=Math.max(this.progressAt,this.busyUntil);
+  if(this.introDone&&climbers.length&&this.best<.99&&time-quietSince>STALL_AFTER&&time-this.movedAt>STALL_STILL){this.progressAt=time;this.moment('stall',time,false);}
+  // drop what's no longer worth saying
+  this.queue=this.queue.filter(q=>{
+   if(time-q.since>(q.line.fresh??FRESH[q.kind]??8))return false;
+   if(q.kind==='zone'){const z=zones.find(z=>z.id===q.line.at.zone);if(z&&!climbers.some(c=>inside(c,z.still||z,z.still?0:1.5)))return false;}
+   if(q.line.id==='stand-up'&&climbers.length&&climbers.every(c=>!c.slumped))return false;
+   return true;
+  });
+  if(!this.introDone&&!this.queue.some(q=>q.kind==='start'||q.kind==='after')&&!this.later.length&&this.played.has('wake')&&time>=this.busyUntil)this.introDone=true;
   if(time<this.busyUntil||!this.queue.length)return null;
-  const {line}=this.queue.shift();this.played.set(line.id,time);this.busyUntil=time+duration(line);
+  // until the wake-up speech is over, only its own lines may play (even in its pauses)
+  const at=this.introDone?0:this.queue.findIndex(q=>q.kind==='start'||q.kind==='after');
+  if(at<0)return null;
+  const [{line,kind}]=this.queue.splice(at,1);this.played.set(line.id,time);this.busyUntil=time+duration(line);
+  if(kind==='fall')this.lastFallLine=this.busyUntil; // quiet counts from the end of the reaction
+  if(line.id==='release')this.closed=true;
   for(const next of this.lines.filter(l=>l.at.after===line.id))this.later.push({line:next,at:this.busyUntil+(next.at.gap||0)});
+  // a skipped chain link still lets the rest of the speech continue
   return line;
  }
- get speaking(){return this.queue.length>0||this.later.length>0;}
 }
-module.exports={Narrator,LINES,duration};
+// the fall reactions on their own, for races
+const FALL_LINES=LINES.filter(l=>String(l.at.moment).startsWith('fall-'));
+module.exports={Narrator,LINES,FALL_LINES,duration,setRecorded,triggerOf};

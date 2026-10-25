@@ -58,9 +58,12 @@ const practice=prepareCourse({id:'practice',biome:'snow',kind:'practice',name:'P
  path:[[-33,1],[-21.5,1],[-18,4],[-12.8,5.6],[-9.7,6.6],[-4.6,6.6],[-3,10.8]],
  // section reset: back to the start of the section you're in
  stations:{wake:{x:-33,y:1.05},ledge:{x:-17,y:4.05},landing:{x:-9.8,y:6.65},platform:{x:-2.5,y:10.85}},
+ // where each place line triggers, and `still`: where someone has to be for it to still make sense when its turn comes
  zones:[
-  {id:'walk',x0:-28,x1:-24,y0:-1,y1:4},{id:'ledge',x0:-23.5,x1:-21,y0:-1,y1:2.6},{id:'gap',x0:-18,x1:-15,y0:2.8,y1:8},
-  {id:'beam',x0:-9.5,x1:-5,y0:5.4,y1:9},{id:'platform',x0:-4,x1:0,y0:9.6,y1:15},{id:'start',x0:-36,x1:-21,y0:-1,y1:3}]
+  {id:'walk',x0:-28,x1:-24,y0:-1,y1:4,still:{x0:-36,x1:-21,y0:-1,y1:3.2}},
+  {id:'ledge',x0:-23.5,x1:-21,y0:-1,y1:2.6,still:{x0:-25,x1:-20.6,y0:-1,y1:4.4}},
+  {id:'gap',x0:-18,x1:-15,y0:2.8,y1:8,still:{x0:-21,x1:-11.5,y0:1,y1:8}},
+  {id:'beam',x0:-9.5,x1:-5,y0:5.4,y1:9,still:{x0:-10.5,x1:-4,y0:5,y1:10.2}}]
 });
 const races=require('./race-courses.cjs');
 const forest=prepareCourse(races.forest),campus=prepareCourse(races.campus);
