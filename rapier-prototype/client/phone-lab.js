@@ -12,8 +12,11 @@
  const enable=document.createElement('button');enable.className='ghost';enable.textContent='Enable motion';
  enable.onclick=async()=>{skipSensors=false;const ok=await Motion.enable();if(ok)PhoneControls.setTouchMode(false);permissionError=ok?'':'Safari has not granted motion access. Check this site’s permission, then retry.';sensorText.textContent=ok?'Permission accepted. Tilt the phone gently to check delivery.':'Permission was not granted. Check Safari motion permission, then try again.';};
  const skip=document.createElement('button');skip.className='ghost';skip.textContent='Continue with touch controls';
- let skipSensors=false,permissionError='';
- skip.onclick=()=>{skipSensors=true;PhoneControls.setTouchMode(true);document.getElementById('startBtn').click();};
+ let skipSensors=false,permissionError='',pendingStart=null;
+ skip.onclick=()=>{skipSensors=true;PhoneControls.setTouchMode(true);Net.socket.emit('start',pendingStart||{});};
+ const practiceInvite=document.createElement('p');practiceInvite.className='practice-invite';practiceInvite.textContent='First climb? Practice aiming, grabbing and jumping together. You can skip any time.';
+ const practiceButton=document.createElement('button');practiceButton.type='button';practiceButton.className='ghost practice-start';practiceButton.textContent='Calibrate & practice together';practiceButton.onclick=()=>Net.socket.emit('start',{practice:true});
+ document.getElementById('lobby').insertBefore(practiceInvite,document.getElementById('startBtn'));document.getElementById('lobby').insertBefore(practiceButton,document.getElementById('startBtn'));
  sensorCard.append(heading,sensorText,enable,skip);document.getElementById('lobby').insertBefore(sensorCard,document.getElementById('startBtn'));
  const recalibrate=document.createElement('button');recalibrate.className='ghost';recalibrate.textContent='Recalibrate motion';recalibrate.onclick=()=>{
   document.getElementById('debug').classList.add('hidden');
@@ -24,7 +27,7 @@
  document.getElementById('debug').insertBefore(recalibrate,document.getElementById('closeDebug'));
  const emit=Net.socket.emit.bind(Net.socket);
  Net.socket.emit=(event,...args)=>{
-  if(event==='start'&&!Net.calibrated){
+  if(event==='start'&&!Net.calibrated){pendingStart=args[0]||null;
    if(sensor.phone()&&!skipSensors&&!sensor.ready()){
     sensorText.textContent=window.isSecureContext?'Waiting for tilt and acceleration samples. Tap Enable motion and tilt gently, or choose touch / keyboard.':'This address uses HTTP. Open the game using trusted HTTPS for iPhone motion, or choose touch / keyboard.';
     return Net.socket;
@@ -49,10 +52,12 @@
   else if(!r.enabled)sensorText.textContent=permissionError||'Tap Enable motion and allow Safari sensor access.';
   else if(!r.ready)sensorText.textContent=`Waiting for live sensors · tilt samples ${r.orientation} · acceleration samples ${r.acceleration}`;
   else sensorText.textContent=`LIVE SENSORS · tilt ${r.orientation} · acceleration ${r.acceleration} · aim ${r.aim.toFixed(2)}, ${r.ay.toFixed(2)} · last gesture: ${r.lastGesture}`;
+  practiceButton.hidden=practiceInvite.hidden=Net.phase==='playing';
   document.getElementById('startBtn').textContent=Net.phase==='playing'?'Calibrate & join round':'Calibrate & start race';
   if(Net.me)emit('motion-report',r);
  },500);
  Net.on('results',awards=>{const win=awards.find(a=>a.val==='summit');if(win)document.getElementById('winnerName').textContent=Net.nameOf(win.id)+' finished the race';});
+ function levelTitle(l){document.querySelector('.edition').textContent=l.kind==='practice'?'▲ SNOWBOUND · BASE CAMP':'▲ SNOWBOUND · '+l.name.split(' · ').at(-1).toUpperCase();}Net.on('level',levelTitle);if(Net.level)levelTitle(Net.level);
  Net.on('you',()=>queueMicrotask(()=>{
   const legs=Net.role==='legs';
   document.getElementById('roleHow').textContent=legs?'Lean to swing your feet. Hop to jump from footing. While hanging, hop as your arms teammate releases for a combo. Squat to tuck; shove or tap Kick to nudge nearby rivals. Jump and tuck buttons are available in settings.':Net.role==='arms'?'Tilt to position your hands. Hold each pad to grab a nearby hold; release to let go. Your legs teammate hops to jump. While hanging, release together with their hop for a combo.':'Tilt aims your hands; hold the pads to grip. Hop to jump from footing. Hanging? Hop and release the pads together for a combo. Travel stays centered.';

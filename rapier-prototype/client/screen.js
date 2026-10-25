@@ -1,7 +1,17 @@
 (()=>{
  const $=id=>document.getElementById(id);
- const phase=p=>{document.body.classList.toggle('playing',p==='playing');$('raceResults').hidden=p!=='results';$('raceControls').open=p!=='playing';$('start').textContent=p==='playing'?'Restart race':'Start race';$('endRound').hidden=p!=='playing';};Net.on('phase',phase);phase(Net.phase);
- for(const [id,event]of Object.entries({start:'start',again:'start',endRound:'endRound',addBot:'addBot',clearBots:'clearBots'}))$(id).onclick=()=>Net.socket.emit(event);
+ const phase=p=>{document.body.classList.toggle('playing',p==='playing');$('raceResults').hidden=p!=='results';$('raceControls').open=p!=='playing';$('start').textContent=p==='playing'&&Net.level?.kind!=='practice'?'Restart race':'Start race';$('endRound').hidden=p!=='playing';};Net.on('phase',phase);phase(Net.phase);
+ for(const [id,event]of Object.entries({start:'start',again:'start',endRound:'endRound',addBot:'addBot',clearBots:'clearBots',practiceStart:'practice',retryRace:'retryRace'}))$(id).onclick=()=>Net.socket.emit(event);
+ function session(data){
+  const host=data.host===Net.player,select=$('courseSelect');select.replaceChildren();
+  for(const c of data.catalog.filter(c=>c.kind==='race')){const o=document.createElement('option');o.value=c.id;o.textContent=c.name+(c.available?'':' · coming soon');o.disabled=!c.available;select.append(o);}select.value=data.selected;select.disabled=!host||Net.phase==='playing';
+  $('hostNotice').textContent=host?'You host · restart keeps this map; next map advances rotation.':'The host chooses maps and starts the race after practice.';
+  for(const id of ['endRound','again','retryRace'])$(id).disabled=!host;
+  $('start').disabled=data.mode==='practice'&&!host;$('practiceStart').disabled=!host;
+ }
+ Net.on('session',session);if(Net.session)session(Net.session);
+ $('courseSelect').onchange=()=>Net.socket.emit('selectCourse',$('courseSelect').value,r=>{if(!r.ok){$('hostNotice').textContent=r.error;$('courseSelect').value=Net.session.selected;}});
+ Net.on('phase',()=>{if(Net.session)session(Net.session);});
  $('overview').onclick=()=>window.LabSetView?.('overview');$('follow').onclick=()=>window.LabSetView?.('follow');
  Net.on('roster',r=>{const list=$('players');list.replaceChildren();for(const c of r){const d=document.createElement('div');d.className='lab-roster';d.textContent=c.name+' · '+(c.bot?'bot':c.members.length+' phone'+(c.members.length>1?'s':''));d.style.borderLeft=`3px solid ${c.color}`;d.style.paddingLeft='8px';list.append(d);}});
  Net.on('results',awards=>{$('resultAwards').replaceChildren();for(const a of awards){const p=document.createElement('p');p.textContent=`${a.title} · ${Net.nameOf(a.id)}${a.val==='summit'?'':` · ${a.val}`}`;$('resultAwards').append(p);}$('raceResults').hidden=false;});
@@ -11,5 +21,5 @@
  const telemetry=new Map();Net.socket.on('motion-status',r=>telemetry.set(r.id,{...r,received:Date.now()}));
  setInterval(()=>{const root=$('motionTelemetry');root.replaceChildren();for(const [id,r]of telemetry){if(Date.now()-r.received>4000){telemetry.delete(id);continue;}const row=document.createElement('small');row.style.display='block';row.textContent=`${r.name}: ${r.ready?'LIVE MOTION':r.secure?'waiting for sensors':'HTTP / no motion'} · ${r.lastGesture}`;root.append(row);}},500);
  fetch('/lab-info').then(r=>r.json()).then(info=>{$('qr').src='/qr.svg?url='+encodeURIComponent(info.phone);$('phoneLink').href=info.phone;$('phoneLink').textContent=info.phone;$('networkNote').textContent=info.secure?'HTTPS ready for phone motion.':'Physical phone motion requires HTTPS.';});
- setInterval(()=>{const s=Net.sample();if(!s)return;$('labStatus').textContent=s.climbers.slice().sort((a,b)=>b.progress-a.progress).map((c,i)=>`${i+1}. ${Net.nameOf(c.id)} · ${Math.round(c.progress*100)}%\nGrip ${c.hands.map(h=>h.grip?'●':'○').join(' ')}${c.carry?' · carrying '+c.carry:''}`).join('\n\n')||'Join from a phone to begin';if(performance.now()>eventUntil)$('raceEvents').replaceChildren();},150);
+ setInterval(()=>{const s=Net.sample();if(!s)return;$('labStatus').textContent=s.mode==='practice'?(s.climbers.map(c=>`${Net.nameOf(c.id)} · ${c.tutorial?.done.length||0}/5 skills`).join('\n')||'Join a phone to practice'):s.climbers.slice().sort((a,b)=>b.progress-a.progress).map((c,i)=>`${i+1}. ${Net.nameOf(c.id)} · ${Math.round(c.progress*100)}%\nGrip ${c.hands.map(h=>h.grip?'●':'○').join(' ')}${c.carry?' · carrying '+c.carry:''}`).join('\n\n')||'Join from a phone to begin';if(performance.now()>eventUntil)$('raceEvents').replaceChildren();},150);
 })();

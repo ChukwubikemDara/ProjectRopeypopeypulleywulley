@@ -1,7 +1,7 @@
 // Rapier 3D adaptation of main’s complete course and gameplay rules.
 const R = require('@dimforge/rapier3d-compat');
 const {CONFIG}=require('./main-config.cjs'); // main 8f94284 mechanics, scaled for the 3D model mass
-const source = require('./course-source.cjs');
+const {mountain:course}=require('./courses.cjs');
 const V = (x=0,y=0,z=0)=>({x,y,z});
 const add=(a,b)=>V(a.x+b.x,a.y+b.y,a.z+b.z);
 const sub=(a,b)=>V(a.x-b.x,a.y-b.y,a.z-b.z);
@@ -13,26 +13,22 @@ const norm=a=>mul(a,1/(len(a)||1));
 const limit=(a,m)=>mul(a,Math.min(1,m/(len(a)||1)));
 const rotate=(v,q)=>add(v,mul(cross(V(q.x,q.y,q.z),add(cross(V(q.x,q.y,q.z),v),mul(v,q.w))),2));
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
-// The complete course is data-identical to main; only depth extrusion is added.
-const terrain=source.terrain;
-const holds=source.holds.map(h=>({...h,z:0}));
-for(const o of source.objects)for(const [i,[x,y]] of o.handles.entries())holds.push({id:`${o.id}:${i}`,x:o.x0+x,y:o.y+y,z:0,kind:'handle',objectId:o.id,local:V(x,y,0)});
-const course={...source,name:'Snowbound · The Long Way Up',terrain,holds,depth:3.4,centered:true,source:'main 8f94284 / complete course'};
-function progressAt(x,y){
+function progressAt(x,y,definition=course){
  let total=0,best={d:Infinity,at:0};
- for(let i=0;i<course.path.length-1;i++){
-  const [ax,ay]=course.path[i],[bx,by]=course.path[i+1],L=Math.hypot(bx-ax,by-ay),t=clamp(((x-ax)*(bx-ax)+(y-ay)*(by-ay))/(L*L),0,1),d=Math.hypot(x-ax-(bx-ax)*t,y-ay-(by-ay)*t);
+ for(let i=0;i<definition.path.length-1;i++){
+  const [ax,ay] =definition.path[i],[bx,by]=definition.path[i+1],L=Math.hypot(bx-ax,by-ay),t=clamp(((x-ax)*(bx-ax)+(y-ay)*(by-ay))/(L*L),0,1),d=Math.hypot(x-ax-(bx-ax)*t,y-ay-(by-ay)*t);
   if(d<best.d)best={d,at:total+L*t};total+=L;
  }
  return best.at/total;
 }
 const stats=()=>({drops:0,saves:0,biggestFall:0,boosts:0,combos:0,kicks:0,pushes:0});
 class Simulation {
-  static async create(){await R.init();return new Simulation();}
-  constructor(){
-    this.world=new R.World(V(0,-14,0));this.world.timestep=1/90;this.world.numSolverIterations=8;this.world.maxCcdSubsteps=4;this.time=0;this.events=[];this.contactEvents=new R.EventQueue(true);this.footStates=new Map();this.holdShapes=new Map();this.climbers=new Map();this.terrainColliders=[];this.owners=new Map();this.holds=holds.map(h=>({...h,loadMs:0,brokenUntil:0}));this.objects=[];this.config={...CONFIG};
-    for(const t of terrain){
-      const vertices=[];for(const z of [-1.7,1.7])for(const [x,y]of t.pts)vertices.push(x,y,z);
+  static async create(definition=course){await R.init();return new Simulation(definition);}
+  constructor(definition=course){
+    this.course=definition;this.floorY=Math.min(...definition.terrain.flatMap(t=>t.pts.map(p=>p[1])))-.35;
+    this.world=new R.World(V(0,-14,0));this.world.timestep=1/90;this.world.numSolverIterations=8;this.world.maxCcdSubsteps=4;this.time=0;this.events=[];this.contactEvents=new R.EventQueue(true);this.footStates=new Map();this.holdShapes=new Map();this.climbers=new Map();this.terrainColliders=[];this.owners=new Map();this.holds=definition.holds.map(h=>({...h,loadMs:0,brokenUntil:0}));this.objects=[];this.config={...CONFIG};
+    for(const t of definition.terrain){
+      const vertices=[];for(const z of [-definition.depth/2,definition.depth/2])for(const [x,y]of t.pts)vertices.push(x,y,z);
       const desc=R.ColliderDesc.convexHull(new Float32Array(vertices));
       if(desc)this.terrainColliders.push(this.world.createCollider(desc.setFriction(t.friction??.8).setCollisionGroups((1<<16)|22)));
     }
@@ -47,29 +43,29 @@ class Simulation {
       const collider=this.world.createCollider(R.ColliderDesc.ball(.11).setTranslation(h.x,h.y,0).setFriction(1.2).setCollisionGroups((8<<16)|16).setActiveHooks(R.ActiveHooks.FILTER_CONTACT_PAIRS));
       this.holdShapes.set(collider.handle,h);h.collider=collider;
     }
-    for(const data of course.objects){
-      const body=this.world.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(data.x0,data.y,0));
-      const collider=this.world.createCollider(R.ColliderDesc.cuboid(data.w/2,data.h/2,1.2).setFriction(.9).setCollisionGroups((1<<16)|22),body);
+    for(const data of definition.objects){
+      const body=this.world.createRigidBody((data.kind==='dummy'?R.RigidBodyDesc.dynamic().enabledTranslations(true,true,false).setLinearDamping(2).setAngularDamping(3).setCcdEnabled(true):R.RigidBodyDesc.kinematicPositionBased()).setTranslation(data.x0,data.y,0));
+      const collider=this.world.createCollider((data.kind==='dummy'?R.ColliderDesc.capsule(.2,.3).setMass(2).setCollisionGroups((2<<16)|19):R.ColliderDesc.cuboid(data.w/2,data.h/2,1.2).setCollisionGroups((1<<16)|22)).setFriction(.9),body);
       const o={...data,body,collider,direction:1};this.objects.push(o);
       for(const h of this.holds)if(h.objectId===o.id)h.body=body;
     }
     // Solid catch floor below the complete route; original walls remain in the course data.
-    this.terrainColliders.push(this.world.createCollider(R.ColliderDesc.cuboid(28,.3,5).setTranslation(25,-3.35,0).setCollisionGroups((1<<16)|22)));
+    this.terrainColliders.push(this.world.createCollider(R.ColliderDesc.cuboid((definition.bounds.x1-definition.bounds.x0)/2+1,.3,5).setTranslation((definition.bounds.x0+definition.bounds.x1)/2,this.floorY,0).setCollisionGroups((1<<16)|22)));
     this.world.step();
   }
   spawn(id){
-    const body=this.world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(source.spawn.x0+(source.spawn.x1-source.spawn.x0)*((this.climbers.size%8)+.5)/8,1.05,0).enabledTranslations(true,true,false).setLinearDamping(.9).setAngularDamping(3).setCanSleep(false).setCcdEnabled(true));
+    const body=this.world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(this.course.spawn.x0+(this.course.spawn.x1-this.course.spawn.x0)*((this.climbers.size%8)+.5)/8,this.course.spawn.y+1.05,0).enabledTranslations(true,true,false).setLinearDamping(.9).setAngularDamping(3).setCanSleep(false).setCcdEnabled(true));
     const torso=this.world.createCollider(R.ColliderDesc.capsule(.22,.28).setMass(5).setFriction(.9).setCollisionGroups((2<<16)|19).setActiveHooks(R.ActiveHooks.FILTER_CONTACT_PAIRS),body);this.owners.set(torso.handle,id);
     const head=this.world.createCollider(R.ColliderDesc.ball(.22).setTranslation(0,.51,0).setMass(0).setCollisionGroups((2<<16)|19).setActiveHooks(R.ActiveHooks.FILTER_CONTACT_PAIRS),body);this.owners.set(head.handle,id);
-    const c={id,body,collider:torso,stats:stats(),carry:0,braced:false,overSince:null,holdingSince:null,savedCounted:false,airPeak:null,arms:{aim:0,ay:.6,l:false,r:false,brace:true},legs:{aim:0,ay:.6,brace:true},assist:true,lastJump:-10,lastFoot:-10,lastPush:-10,lastLetGo:-10,lastCombo:-10,letGoHanging:false,pushHanging:false,pushUntil:0,pushSpeed:0,pushDir:V(0,1,0),stamina:100,lastGestureResult:'ready',tuck:0,hands:[],feet:[],peak:0,safeSpawn:V(body.translation().x,1.05,0),recoveries:0};
+    const c={id,body,collider:torso,stats:stats(),carry:0,braced:false,overSince:null,holdingSince:null,savedCounted:false,airPeak:null,arms:{aim:0,ay:.6,l:false,r:false,brace:true},legs:{aim:0,ay:.6,brace:true},assist:true,lastJump:-10,lastFoot:-10,lastPush:-10,lastLetGo:-10,lastCombo:-10,letGoHanging:false,pushHanging:false,pushUntil:0,pushSpeed:0,pushDir:V(0,1,0),stamina:100,lastGestureResult:'ready',tuck:0,hands:[],feet:[],peak:0,safeSpawn:V(body.translation().x,body.translation().y,0),recoveries:0};
     for(const side of [-1,1]){
-      const hand=this.world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(body.translation().x+side*.35,1.9,0).enabledTranslations(true,true,false).setGravityScale(1).setLinearDamping(2.5).setAngularDamping(6).setCanSleep(false).setCcdEnabled(true));
+      const hand=this.world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(body.translation().x+side*.35,body.translation().y+.85,0).enabledTranslations(true,true,false).setGravityScale(1).setLinearDamping(2.5).setAngularDamping(6).setCanSleep(false).setCcdEnabled(true));
       this.world.createCollider(R.ColliderDesc.ball(.12).setMass(.35).setFriction(.6).setCollisionGroups((4<<16)|1),hand);
       const reachJoint=this.world.createImpulseJoint(R.JointData.rope(CONFIG.upperArm+CONFIG.foreArm,V(side*CONFIG.shoulderX,CONFIG.shoulderY,0),V()),body,hand,true);
       c.hands.push({body:hand,owner:id,reachJoint,grip:null,target:null,side});
     }
     for(const side of [-1,1]){
-      const foot=this.world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(body.translation().x+side*.2,.11,0).enabledTranslations(true,true,false).setLinearDamping(.8).setCanSleep(false).setCcdEnabled(true));
+      const foot=this.world.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(body.translation().x+side*.2,body.translation().y-.94,0).enabledTranslations(true,true,false).setLinearDamping(.8).setCanSleep(false).setCcdEnabled(true));
       const collider=this.world.createCollider(R.ColliderDesc.ball(.1).setMass(.28).setFriction(1.2).setCollisionGroups((16<<16)|11).setActiveHooks(R.ActiveHooks.FILTER_CONTACT_PAIRS),foot);this.owners.set(collider.handle,id);
       const reachJoint=this.world.createImpulseJoint(R.JointData.rope(CONFIG.thigh+CONFIG.shin,V(side*CONFIG.hipX,-CONFIG.hipY,0),V()),body,foot,true);
       c.feet.push({body:foot,collider,reachJoint,side,planted:false});
@@ -108,16 +104,16 @@ class Simulation {
     }return false;
   }
   remove(id){const c=this.climbers.get(id);if(!c)return;for(const o of this.climbers.values())for(const h of o.hands)if(h.grip?.kind==='climber'&&h.grip.id===id)this.release(h,'left');for(const h of c.hands){this.release(h,'left');this.world.removeRigidBody(h.body);}for(const f of c.feet){this.footStates.delete(f.collider.handle);this.owners.delete(f.collider.handle);this.world.removeRigidBody(f.body);}for(const [handle,owner]of this.owners)if(owner===id)this.owners.delete(handle);this.world.removeRigidBody(c.body);this.climbers.delete(id);}
-  reset(){for(const id of [...this.climbers.keys()])this.remove(id);this.events.length=0;for(const h of this.holds){h.loadMs=0;h.brokenUntil=0;h.collider?.setEnabled(true);}for(const o of this.objects){o.direction=1;o.body.setTranslation(V(o.x0,o.y,0),true);o.body.setNextKinematicTranslation(V(o.x0,o.y,0));}this.world.step(this.contactEvents,this.hooks);}
+  reset(){for(const id of [...this.climbers.keys()])this.remove(id);this.events.length=0;for(const h of this.holds){h.loadMs=0;h.brokenUntil=0;h.collider?.setEnabled(true);}for(const o of this.objects){o.direction=1;o.body.setTranslation(V(o.x0,o.y,0),true);if(o.kind!=='dummy')o.body.setNextKinematicTranslation(V(o.x0,o.y,0));else{o.body.setLinvel(V(),true);o.body.setAngvel(V(),true);o.body.setRotation({x:0,y:0,z:0,w:1},true);}}this.world.step(this.contactEvents,this.hooks);}
   tune(key,value){this.config[key]=value;if(key==='gravity')this.world.gravity=V(0,-value,0);}
-  dynamicState(){return{objects:this.objects.map(o=>({id:o.id,...o.body.translation()})),broken:this.holds.filter(h=>h.brokenUntil>this.time).map(h=>h.id),strain:this.holds.filter(h=>h.breakMs&&h.loadMs>0).map(h=>[h.id,h.loadMs/h.breakMs])};}
+  dynamicState(){return{objects:this.objects.map(o=>({id:o.id,...o.body.translation(),rotation:o.body.rotation()})),broken:this.holds.filter(h=>h.brokenUntil>this.time).map(h=>h.id),strain:this.holds.filter(h=>h.breakMs&&h.loadMs>0).map(h=>[h.id,h.loadMs/h.breakMs])};}
   results(winner){const list=[...this.climbers.values()],out=winner?[{title:'King of the Mountain',id:winner,val:'summit'}]:[];for(const [key,title]of Object.entries({combos:'In Sync',kicks:'Kickboxer',drops:'Backstabber',pushes:'Leg Day',boosts:'Stepping Stool',biggestFall:'Biggest Fall'})){const top=list.slice().sort((a,b)=>b.stats[key]-a.stats[key])[0];if(top?.stats[key]>0)out.push({title,id:top.id,val:key==='biggestFall'?Math.round(top.stats[key])+'m':top.stats[key]});}return out;}
   checkpoint(c,where='pipe'){
     for(const h of c.hands)this.release(h);
     const p=V(10.2,4.0,0);
     c.body.setTranslation(p,true);c.body.setLinvel(V(),true);c.body.setAngvel(V(),true);c.body.setRotation({x:0,y:0,z:0,w:1},true);
     for(const [i,h]of c.hands.entries()){
-      const candidates=holds.filter(a=>a.kind==='handle');
+      const candidates=this.holds.filter(a=>a.kind==='handle');if(!candidates.length)return;
       candidates.sort((a,b)=>len(sub(a,add(p,V(h.side*.4,.9,0))))-len(sub(b,add(p,V(h.side*.4,.9,0)))));
       this.grab(h,candidates[Math.min(i,candidates.length-1)]);
     }
@@ -185,6 +181,9 @@ class Simulation {
       for(const other of this.climbers.values())if(other!==c&&c.feet.some(f=>len(sub(f.body.translation(),other.body.translation()))<1)){
         const d=norm(sub(other.body.translation(),c.body.translation()));other.body.applyImpulse(mul(add(d,V(0,.3,0)),this.config.kickImpulse*other.body.mass()),true);const held=!(this.courseGrips(other)&&!other.braced);if(!held){this.release(other.hands.find(h=>h.grip?.kind==='hold'),'kicked');this.events.push({type:'slip',id:other.id,reason:'kicked'});}else other.stamina=Math.max(0,other.stamina-20);c.stats.kicks++;c.lastGestureResult='kick';this.events.push({type:'kick',id:c.id,target:other.id,held});
       }
+      for(const dummy of this.objects)if(dummy.kind==='dummy'&&c.feet.some(f=>len(sub(f.body.translation(),dummy.body.translation()))<1)){
+        const direction=norm(add(sub(dummy.body.translation(),c.body.translation()),V(0,.4,0)));dummy.body.applyImpulse(mul(direction,this.config.kickImpulse*dummy.body.mass()),true);c.lastGestureResult='kick';c.stats.kicks++;this.events.push({type:'kick',id:c.id,target:dummy.id,practice:true});
+      }
       return true;
     }
     return false;
@@ -208,7 +207,7 @@ class Simulation {
     this.time+=this.world.timestep;this.moveObjects();this.strainTwigs();
     for(const c of this.climbers.values()){
       const initial=c.body.translation();
-      if(![initial.x,initial.y,initial.z].every(Number.isFinite)||initial.y< -4||initial.x< -2||initial.x>52){this.recover(c);continue;}
+      if(![initial.x,initial.y,initial.z].every(Number.isFinite)||initial.y<this.floorY-.65||initial.x<this.course.bounds.x0||initial.x>this.course.bounds.x1){this.recover(c);continue;}
       if(c.bot)this.botThink(c);
       c.braced=c.arms.brace!==false&&c.hands.some(h=>h.grip)&&c.stamina>0;
       const p=c.body.translation(),q=c.body.rotation(),velocity=c.body.linvel();
@@ -272,12 +271,12 @@ class Simulation {
     // CCD handles fast falls; this guard recovers invalid/embedded states without losing the team.
     for(const c of this.climbers.values()){
       const p=c.body.translation();
-      if(p.y< -4||![p.x,p.y,p.z].every(Number.isFinite)||this.terrainColliders.some(t=>t.containsPoint(p)))this.recover(c);
+      if(p.y<this.floorY-.65||![p.x,p.y,p.z].every(Number.isFinite)||this.terrainColliders.some(t=>t.containsPoint(p)))this.recover(c);
       this.bonk(c);this.carryStep(c);
     }
   }
   moveObjects(){
-    for(const o of this.objects){const p=o.body.translation();if(p.x>=o.x1)o.direction=-1;else if(p.x<=o.x0)o.direction=1;o.body.setNextKinematicTranslation(V(clamp(p.x+o.speed*o.direction*this.world.timestep,o.x0,o.x1),o.y,0));}
+    for(const o of this.objects){const p=o.body.translation();if(o.kind==='dummy'){o.body.resetForces(true);o.body.resetTorques(true);if(p.y<this.floorY||Math.abs(p.x-o.x0)>3){o.body.setTranslation(V(o.x0,o.y,0),true);o.body.setLinvel(V(),true);}const up=rotate(V(0,1,0),o.body.rotation());o.body.addTorque(sub(mul(cross(up,V(0,1,0)),8),mul(o.body.angvel(),1)),true);continue;}if(p.x>=o.x1)o.direction=-1;else if(p.x<=o.x0)o.direction=1;o.body.setNextKinematicTranslation(V(clamp(p.x+o.speed*o.direction*this.world.timestep,o.x0,o.x1),o.y,0));}
     for(const h of this.holds)if(h.objectId){const o=this.objects.find(o=>o.id===h.objectId),p=o.body.translation();h.x=p.x+h.local.x;h.y=p.y+h.local.y;}
   }
   strainTwigs(){
@@ -292,7 +291,7 @@ class Simulation {
   }
   bonk(c){
     if(this.time<(c.cdBonk||0))return;
-    for(const o of this.objects){let touching=false;this.world.contactPair(c.collider,o.collider,m=>{if(m.numSolverContacts()>0)touching=true;});if(!touching)continue;const away=Math.sign(c.body.translation().x-o.body.translation().x)||o.direction;for(const b of this.parts(c))b.setLinvel(add(b.linvel(),V(away*4.5,3.5,0)),true);c.cdBonk=this.time+.8;this.events.push({type:'bonk',id:c.id});break;}
+    for(const o of this.objects){if(o.kind==='dummy')continue;let touching=false;this.world.contactPair(c.collider,o.collider,m=>{if(m.numSolverContacts()>0)touching=true;});if(!touching)continue;const away=Math.sign(c.body.translation().x-o.body.translation().x)||o.direction;for(const b of this.parts(c))b.setLinvel(add(b.linvel(),V(away*4.5,3.5,0)),true);c.cdBonk=this.time+.8;this.events.push({type:'bonk',id:c.id});break;}
   }
   carryStep(c){
     const dt=this.world.timestep,n=c.hands.filter(h=>h.grip).length,feet=this.grounded(c);
@@ -305,12 +304,19 @@ class Simulation {
   }
   botThink(c){
     if(c.releaseAt&&this.time>=c.releaseAt){for(let i=0;i<2;i++)this.setHand(c,i,false);c.openUntil=this.time+.3;c.releaseAt=0;}
-    const p=c.body.translation(),progress=progressAt(p.x,p.y);
-    if(!c.botTarget||this.time>c.targetUntil||c.botTarget.brokenUntil>this.time||progressAt(c.botTarget.x,c.botTarget.y)<=progress){c.botTarget=this.holds.filter(h=>h.brokenUntil<=this.time&&Math.hypot(h.x-p.x,h.y-p.y)<3.2&&progressAt(h.x,h.y)>progress+.004).sort((a,b)=>Math.hypot(a.x-p.x,a.y-p.y)-Math.hypot(b.x-p.x,b.y-p.y))[0];c.targetUntil=this.time+3.5;}
+    const p=c.body.translation(),progress=progressAt(p.x,p.y,this.course);
+    if(!c.botTarget||this.time>c.targetUntil||c.botTarget.brokenUntil>this.time||progressAt(c.botTarget.x,c.botTarget.y,this.course)<=progress){c.botTarget=this.holds.filter(h=>h.brokenUntil<=this.time&&Math.hypot(h.x-p.x,h.y-p.y)<3.2&&progressAt(h.x,h.y,this.course)>progress+.004).sort((a,b)=>Math.hypot(a.x-p.x,a.y-p.y)-Math.hypot(b.x-p.x,b.y-p.y))[0];c.targetUntil=this.time+3.5;}
     const dx=c.botTarget?c.botTarget.x-p.x:1.5,dy=c.botTarget?c.botTarget.y-p.y:.5;c.arms.aim=clamp(dx/1.5,-1,1)*.8;c.arms.ay=clamp(dy/1.2,-1,1);c.legs.aim=clamp(dx/2,-1,1);c.arms.brace=true;
     for(let i=0;i<2;i++){const h=c.hands[i];if(h.grip?.kind==='climber'&&this.time-h.since>2.5)c.openUntil=this.time+.8;this.setHand(c,i,this.time>(c.openUntil||0));}
     if(this.time<(c.nextMove??(c.nextMove=this.time+.8)))return;c.nextMove=this.time+1.6;
     this.gesture(c,'flick',1);if(this.courseGrips(c))c.releaseAt=this.time+.12;
+  }
+  practiceStation(c,stage){
+    if(this.course.kind!=='practice')return false;
+    const point=this.course.stations[stage]||this.course.stations.aim;
+    delete c.tutorialTakeoff;const closed=[c.arms.l,c.arms.r];c.safeSpawn=V(point.x,point.y,0);this.recover(c);for(const h of c.hands)h.noGripUntil=0;[c.arms.l,c.arms.r]=closed;c.lastJump=c.lastPush=c.lastLetGo=-10;c.stamina=100;
+    // Closed pads still have to catch real holds; the station never awards a grip or combo.
+    return true;
   }
   snapshot(c){
     const p=c.body.translation(),q=c.body.rotation(),vel=c.body.linvel();
@@ -321,7 +327,7 @@ class Simulation {
     });
     const ground=this.grounded(c);
     const legs=c.feet.map(f=>{const foot=f.body.translation(),hip=add(p,rotate(V(f.side*this.config.hipX,-this.config.hipY,0),q));const knee=add(mul(add(hip,foot),.5),V(f.side*.05,.02,.14));return{kx:knee.x,ky:knee.y,kz:knee.z,fx:foot.x,fy:foot.y,fz:foot.z,planted:!!this.footSupport(f)};});
-    return {id:c.id,...p,assist:c.assist,grounded:ground,rotation:q,velocity:vel,angular:c.body.angvel(),stamina:c.stamina,actions:{jump:this.jumpState(c,ground),kick:{cooldown:Math.max(0,this.config.kickCooldown-(this.time-(c.lastKick??-10)))}},carry:c.carry,stats:{...c.stats},lastAction:c.lastGestureResult,braced:c.braced,air:!ground&&!hands.some(h=>h.grip),hands,legs,gripping:hands.some(h=>h.grip),progress:progressAt(p.x,p.y),finished:p.x>=course.finish.zoneX&&p.y>=course.finish.y-.3};
+    return {id:c.id,...p,assist:c.assist,grounded:ground,rotation:q,velocity:vel,angular:c.body.angvel(),stamina:c.stamina,actions:{jump:this.jumpState(c,ground),kick:{cooldown:Math.max(0,this.config.kickCooldown-(this.time-(c.lastKick??-10)))}},carry:c.carry,stats:{...c.stats},lastAction:c.lastGestureResult,braced:c.braced,air:!ground&&!hands.some(h=>h.grip),hands,legs,gripping:hands.some(h=>h.grip),progress:progressAt(p.x,p.y,this.course),finished:this.course.kind!=='practice'&&p.x>=this.course.finish.zoneX&&p.y>=this.course.finish.y-.3};
   }
   free(){for(const id of [...this.climbers.keys()])this.remove(id);this.contactEvents.free();this.world.free();}
 }

@@ -28,6 +28,20 @@ Choosing “Continue with touch controls” enables sensor-free aiming plus all 
 
 The status card reports actual server jump readiness, combo timing cues, and missing footing; pads distinguish OPEN / IN REACH / SEARCHING / GRIPPED / CLIMBER, and feet show Planted / Free. The server uses the same jump eligibility calculation for both gameplay and HUD snapshots. Backgrounding the page releases pads and centers touch aim. New controls are browser-tested; current physical iPhone motion still needs a user refresh/feel check after this change.
 
+## Map loading and shared practice (milestone 2)
+
+The host can choose a built race course in Race controls, start shared Base Camp practice, retry the same map, or advance from results to the next available race map. Forest and Old Main are visibly marked coming soon until milestone 3; there is no disguised duplicate-map rotation. With the current catalog, Snowbound is the only built race and therefore rotates back to itself.
+
+`courses.cjs` prepares/validates plain course definitions (bounds, convex terrain pieces, finite path segments and unique holds). `Simulation.create(course)` owns that definition and derives collision depth, catch floor, spawn, progress, bounds and finish from it. The server replaces worlds while retaining team identities/roles and tuned settings. Every load has a revision; clients discard the old interpolation buffer and reject stale snapshots. The renderer disposes course-owned meshes, textures, geometries, characters and grip cues before rebuilding. The original mountain course remains data-identical to main.
+
+Practice is optional and shared. It teaches aim → a real grip → an actual rising jump → a synchronized combo → a physical kick against a training snowpal. Checklists are per climber/team, shown on both controllers and the spectator. Actions may be learned out of order, retries never award progress, and nobody must finish a checklist before the host starts a race. Reset stance moves the team to the current lesson station; at the hanging station, hold the pads before resetting so hands can catch real holds.
+
+Use Calibrate & practice together in the phone lobby, or Practice together on the spectator. Skipping tips hides them on that device; Show practice tips restores them. The host can start the race immediately. Spectators are preferred as host, with automatic handoff/reconnect handling. Buttons remain behind calibration/role checks.
+
+Narration uses an original short script, always has captions, and is muted until Enable voice is tapped on that device. Speech uses the browser's optional [Web Speech synthesis API](https://developer.mozilla.org/en-US/docs/Web/API/SpeechSynthesis/speak); absent/failed speech leaves captions working. Mute, hiding tips, leaving practice and backgrounding the page cancel queued speech. Voice quality and availability depend on the device and still need physical-phone listening checks.
+
+Additional checks cover ordered rotation using a distinct test course, repeated world replacements, retained teams, retry versus next-map semantics, stale packet rejection, map availability and host permissions, all five tutorial skills through two controller roles and real physics, dummy impulse, optional voice/mute/captions, and preserving a practice request through touch fallback.
+
 ## Full course and rules
 
 The source course and config are copied from main `8f94284` into `course-source.cjs` and `main-config.cjs`. Terrain, obstacle height, original hold positions, moving cart, signs, racing line, and finish zone are preserved.
