@@ -67,5 +67,10 @@ function uiHarness(){
  cp.ctx.PhoneInput.setTouchMode(false);cp.ctx.Net.role='legs';cp.ctx.ControlsPreview.show();assert.equal(cp.ctx.ControlsPreview.step,'flick','Motion LEGS still learn the flick');
  console.log('PASS controls guide follows input mode and role, including replay from settings');
  console.log('PASS the how-to-play card shows your role\'s moves once at the start of the prologue');
+ // remote mode is the default: the phone is a controller and never loads the 3D view unless asked
+ const rm=uiHarness();rm.ctx.localStorage={getItem:()=>null,setItem(){}};rm.load('remote-mode.js');
+ assert.equal(rm.ctx.document.body.classList.contains('remote'),true,'phones start in remote mode');assert.equal(rm.ctx.RemoteMode.on,true);
+ assert.ok(rm.created.some(n=>n.id==='showGameOnPhone'&&n.checked===false),'settings offer to show the game on the phone, off by default');
+ console.log('PASS phones default to remote mode (no 3D view), with a setting to turn it back on');
  console.log('PASS the caption queue ignores repeats, keeps the release line and clears when the round ends');console.log('PASS voice is opt-in on phones, recordings play first, and a missing file falls back to speech');
 })().catch(e=>{console.error(e);process.exitCode=1;});
