@@ -13,8 +13,9 @@
  prologue.onclick=()=>Net.socket.emit('practice');race.onclick=()=>Net.socket.emit('start');back.onclick=()=>{if(Net.phase==='results')Net.socket.emit('selectCourse',Net.session?.selected,r=>{if(!r?.ok)back.textContent=r?.error||'Could not return to menu';});else Net.socket.emit('endRound');};
  const host=()=>Net.session?.host===Net.player;let catalogKey='';
  function render(){
-  const lobby=Net.phase!=='playing'&&Net.phase!=='results',s=Net.session;
-  menu.hidden=!lobby;document.body.classList.toggle('menu-open',lobby);back.hidden=lobby||!host();
+  // until the server says which phase it's in, show nothing: guessing "lobby" flashes the menu over a running round
+  const lobby=Net.phaseKnown!==false&&Net.phase!=='playing'&&Net.phase!=='results',s=Net.session;
+  menu.hidden=!lobby;document.body.classList.toggle('menu-open',lobby);document.body.classList.toggle('phase-pending',Net.phaseKnown===false);back.hidden=lobby||!host();
   if(!s)return;
   const races=s.catalog.filter(c=>c.kind==='race'&&c.available),key=races.map(c=>c.id+':'+c.name).join('|');
   // Keep map controls mounted: periodic roster updates must not steal keyboard focus.

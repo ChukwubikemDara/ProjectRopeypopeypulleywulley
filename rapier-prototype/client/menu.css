@@ -21,6 +21,7 @@
 .menu-note{margin:0;font-weight:800;font-size:12px;line-height:1.5;color:#3b4e66}
 .menu-back{position:fixed;z-index:21;right:22px;bottom:76px;padding:8px 14px;border:3px solid #22304a;border-bottom-width:5px;border-radius:14px;background:#fff9ec;color:#22304a;font:400 16px 'Lilita One','Arial Rounded MT Bold',system-ui,sans-serif;letter-spacing:.8px;cursor:pointer}
 .menu-back[hidden]{display:none}
+.phase-pending .lab-title,.phase-pending .lab-status,.phase-pending #raceEvents{visibility:hidden}
 .menu-open .lab-title,.menu-open #practiceStart,.menu-open #start,.menu-open #courseLabel,.menu-open #courseSelect,.menu-open .lab-status,.menu-open #raceEvents{display:none!important}
 .menu-open .lab-panel{left:26px;bottom:26px;width:218px;max-height:75vh;padding:19px;gap:10px;border:2px solid #fff8e5b3;background:#fffaf0f5;box-shadow:0 12px 50px #20324924;box-sizing:border-box;border-radius:24px}
 .menu-open .lab-panel>b{font-size:20px;font-weight:900;letter-spacing:-.5px}
