@@ -38,7 +38,7 @@ function clearLevel(){
  if(ambience){scene.remove(ambience.hero);ambience.dispose();ambience=null;}
  const geometries=new Set(),materials=new Set(),textures=new Set();
  const roots=[terrainGroup,...[...objectModels.values()].map(o=>o.root)];
- for(const root of roots){root.traverse(o=>{if(o.geometry&&o.geometry!==ball)geometries.add(o.geometry);for(const m of [o.material].flat().filter(Boolean))if(!persistentMaterials.has(m)){materials.add(m);if(m.map)textures.add(m.map);}});if(root!==terrainGroup)scene.remove(root);}
+ for(const root of roots){root.traverse(o=>{if(o.isInstancedMesh)o.dispose();if(o.geometry&&o.geometry!==ball)geometries.add(o.geometry);for(const m of [o.material].flat().filter(Boolean))if(!persistentMaterials.has(m)){materials.add(m);if(m.map)textures.add(m.map);}});if(root!==terrainGroup)scene.remove(root);}
  terrainGroup.clear();holdModels.clear();objectModels.clear();flag=null;
  cueGroup.traverse(o=>{o.geometry?.dispose();o.material?.map?.dispose();if(o.material&&!persistentMaterials.has(o.material))o.material.dispose();});cueGroup.clear();cues.length=0;barrier=null;
  for(const g of geometries)g.dispose();for(const t of textures)t.dispose();for(const m of materials)m.dispose();
@@ -126,10 +126,12 @@ function build(L){
  terrainGroup.traverse(o=>{o.updateMatrix();o.matrixAutoUpdate=false;});for(const {mesh:m,data:h}of holdModels.values())if(h.objectId||h.kind==='twig')m.matrixAutoUpdate=true;terrainGroup.updateMatrixWorld(true);ambience.activate();window.LabSetView?.(Net.phase==='playing'?'follow':'menu');
 }
 Net.on('level',build);if(Net.level)build(Net.level);
-const isLobby=()=>Net.phase!=='playing'&&Net.phase!=='results';
+const isLobby=()=>Net.phase!=='playing'&&Net.phase!=='results';let menuCameraReady=false;
+function menuShot(){const portrait=camera.aspect<1,focus={snow:[14,10],forest:[14,10.5],campus:[17,10]}[level?.biome]||[14,10];return {target:new THREE.Vector3(focus[0]+(portrait?0:2),focus[1]+(portrait?2:0),-2),distance:portrait?40:31};}
 const controls=phone?null:new OrbitControls(camera,renderer.domElement);if(controls){controls.enableDamping=true;controls.target.set(25,8,0);}
 window.LabSetView=view=>{
  window.LabView=view;
+ if(view==='menu'&&controls&&!menuCameraReady){const {target,distance}=menuShot();controls.target.copy(target);camera.position.copy(target).add(new THREE.Vector3(2,3,distance));camera.lookAt(target);menuCameraReady=true;}
  if(view==='overview'&&controls){
   const b=level?.bounds||{x0:-2,x1:52,y0:-1,y1:20},width=b.x1-b.x0,height=b.y1-b.y0,cx=(b.x0+b.x1)/2,cy=(b.y0+b.y1)/2,tan=Math.tan(THREE.MathUtils.degToRad(camera.fov/2));
   const d=Math.max(12,(width+Math.max(10,width*.7))/(2*tan*camera.aspect),(height+4)/(2*tan));
@@ -170,9 +172,7 @@ renderer.setAnimationLoop(now=>{
   const offset=new THREE.Vector3(1.6,1.4,distance);
   camera.position.lerp(target.clone().add(offset),1-Math.exp(-dt*5));camera.lookAt(target);
  }else if(isLobby()&&window.LabView==='menu'){
-  const biome=level?.biome||'snow',portrait=camera.aspect<1,focus={snow:[14,10],forest:[14,10.5],campus:[17,10]}[biome]||[14,10];
-  const t=reducedMotion.matches?0:now/1000,wave=Math.sin(t*.09)*.55;
-  const target=new THREE.Vector3(focus[0]+(portrait?0:2)+wave,focus[1]+(portrait?2:0),-2),distance=portrait?40:31,blend=reducedMotion.matches?1:1-Math.exp(-dt*4);
+  const t=reducedMotion.matches?0:now/1000,wave=Math.sin(t*.09)*.55,{target,distance}=menuShot(),blend=reducedMotion.matches?1:1-Math.exp(-dt*4);target.x+=wave;
   controls.enabled=false;controls.target.lerp(target,blend);camera.position.lerp(target.clone().add(new THREE.Vector3(2+wave,3,distance)),blend);camera.lookAt(controls.target);
  }else if(window.LabView==='follow'&&s?.climbers.length){
   controls.enabled=true;

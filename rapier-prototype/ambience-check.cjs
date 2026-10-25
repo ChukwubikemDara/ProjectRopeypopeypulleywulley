@@ -4,7 +4,7 @@ const {pathToFileURL}=require('node:url');
 (async()=>{
  const threeUrl=pathToFileURL(path.join(path.dirname(require.resolve('three')),'three.module.js')).href;
  const THREE=await import(threeUrl),characterUrl=pathToFileURL(path.join(__dirname,'../public/js/alpine-character.js')).href;
- const source=fs.readFileSync(path.join(__dirname,'client/ambience.js'),'utf8').replace("'three'",JSON.stringify(threeUrl)).replace("'/js/alpine-character.js'",JSON.stringify(characterUrl));
+ const source=fs.readFileSync(path.join(__dirname,'client/ambience.js'),'utf8').replace("'three'",JSON.stringify(threeUrl)).replace("'/js/alpine-character.js'",JSON.stringify(characterUrl)).replace("'./world-details.js'",JSON.stringify(pathToFileURL(path.join(__dirname,'client/world-details.js')).href));
  const {createAmbience}=await import('data:text/javascript;base64,'+Buffer.from(source).toString('base64'));
  global.document={createElement:()=>({getContext:()=>({createLinearGradient:()=>({addColorStop(){}}),fillRect(){}})})};
  function build(course,phone){
@@ -23,11 +23,13 @@ const {pathToFileURL}=require('node:url');
    assert.ok(desktop.root.children.some(o=>o.matrixAutoUpdate),'Animated transforms must opt out of the renderer static freeze');
    A.update(40,{reduced:true,lobby:true});const still=positions(desktop.root),stillActors=positions(A.hero);A.update(80,{reduced:true,lobby:true});assert.deepEqual(positions(desktop.root),still,'Reduced-motion scenery must remain still');assert.deepEqual(positions(A.hero),stillActors,'Reduced-motion actors remain still too');
    const particles=desktop.root.children.find(o=>o.isPoints),mobileParticles=phone.root.children.find(o=>o.isPoints);assert.equal(particles.visible,false);assert.equal(particles.geometry.attributes.position.count,100);assert.equal(mobileParticles.geometry.attributes.position.count,40);
-   assert.equal(phone.ambience.hero.children.length,1,'Phones do not allocate decorative character models');A.update(90,{reduced:false,lobby:false});assert.equal(A.hero.visible,false,'Menu actors must disappear for races/prologue');
+   assert.equal(phone.ambience.hero.children.length,0,'Phones do not allocate decorative lobby characters or rope');
+   assert.equal(A.hero.userData.vignette,{mountain:'rope-climb',forest:'branch-rescue',campus:'rooftop-wave'}[course.id]);assert.equal(!!A.hero.getObjectByName('lobby-rope'),course.id==='mountain','Only the mountain vignette uses a rope');
+   if(course.id==='forest'){assert.ok(desktop.root.getObjectByName('forest-hare'));assert.ok(desktop.root.getObjectByName('forest-songbird'));assert.ok(desktop.root.children.some(o=>o.isInstancedMesh),'Flowers use batched geometry');}A.update(90,{reduced:false,lobby:false});assert.equal(A.hero.visible,false,'Menu actors must disappear for races/prologue');
    let disposed=false;A.sky.addEventListener('dispose',()=>disposed=true);A.dispose();assert.ok(disposed,'Sky texture is disposed between maps');
    console.log(`PASS ${course.id}: real scene animation, static-freeze opt-out, reduced motion, capped mobile particles, lobby-only actors and sky cleanup`);
   }finally{
-   phone.ambience.dispose();for(const item of [desktop,phone]){const geos=new Set(),mats=new Set();item.root.traverse(o=>{if(o.geometry)geos.add(o.geometry);if(o.material)mats.add(o.material);});geos.forEach(g=>g.dispose());mats.forEach(m=>m.dispose());item.root.clear();item.ball.dispose();}
+   phone.ambience.dispose();for(const item of [desktop,phone]){const geos=new Set(),mats=new Set();item.root.traverse(o=>{if(o.isInstancedMesh)o.dispose();if(o.geometry)geos.add(o.geometry);if(o.material)mats.add(o.material);});geos.forEach(g=>g.dispose());mats.forEach(m=>m.dispose());item.root.clear();item.ball.dispose();}
   }
  }
  delete global.document;

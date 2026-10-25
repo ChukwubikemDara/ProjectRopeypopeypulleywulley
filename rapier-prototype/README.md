@@ -22,13 +22,15 @@ Physical iPhone motion needs trusted HTTPS. With the ignored local `certs/` dire
 
 ## Scenic lobby and motion Kick update
 
-The lobby now frames a scenic section of the selected world, with the existing character model used for two decorative dangling climbers. Snowbound adds smooth layered snow peaks, sculpted snow-covered rocks and clouds; forest adds layered canopy and drifting pollen/leaves; campus adds distant academic roofs, a clock tower, warm foliage and pennants. These props are decorative, without colliders. Course geometry, physics, downward gravity and the scripted prologue are unchanged.
+The lobby now frames a scenic section of the selected world, with the existing character model used for two decorative climbers in a different scene for each biome. Snowbound adds smooth layered snow peaks, sculpted snow-covered rocks and clouds; forest adds layered canopy and drifting pollen/leaves; campus adds distant academic roofs, a clock tower, warm foliage and pennants. These props are decorative, without colliders. Course geometry, physics, downward gravity and the scripted prologue are unchanged.
 
 Ambient motion uses ordinary Three.js scene objects and one capped particle draw (100 desktop / 40 phone). Phones omit the decorative character models. Props animate more slowly during play, and reduced-motion preference stops the decorative movement and lobby camera drift. Course swaps dispose the old sky texture and decorative resources; animated transforms explicitly opt out of the static transform freeze. Renderer FPS/draw/geometry metrics are available as canvas data attributes for QA, not a new gameplay overlay.
 
 The menu keeps a real QR and join link visible, puts technical controls under Host settings, preserves keyboard focus while the roster updates, and supports narrow screens. Returning to Menu from results uses the existing host course-selection action, because the server's end-round action only accepts a playing round.
 
 Motion-mode LEGS/solo players again have a Kick button alongside the shove gesture. Jump/Tuck buttons remain touch-mode controls. Calibration, roles, shared motion/button lockout and server cooldowns remain enforced. The prologue instructions were not changed. Browser checks verified the actual Kick control and out-of-range feedback; physical-phone comfort still needs user testing.
+
+The next detail pass gives Snowbound its rope-climbing vignette, Forest a helping-hand scene on a mossy perch, and Campus a waving pair on a terrace. `world-details.js` adds batched flowers, ferns, an ear-twitching hare and a bounded songbird flight in Forest; Campus gains benches, lanterns, planted tubs, drainpipes, stone trim, roof vents and gently waving banners. These are visual stage props, not added obstacles. Instanced flower buffers are disposed with the course; reduced-motion preference pauses wildlife and cloth as well as other ambient animation.
 
 Additional tests: `menu-check.cjs` verifies focus, host permissions and results navigation; `ambience-check.cjs` uses real Three.js objects to verify animation, reduced motion, phone limits, lobby-only actors and sky cleanup. The existing physics/multiplayer suite remains required.
 

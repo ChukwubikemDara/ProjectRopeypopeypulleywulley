@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {addWorldDetails} from './world-details.js';
 import {createAlpineCharacter} from '/js/alpine-character.js';
 // Visual-only scenery. No physics objects or input handlers belong in this module.
 export function createAmbience(L,{mesh,puff,box,mat,phone,root}){
@@ -58,18 +59,46 @@ export function createAmbience(L,{mesh,puff,box,mat,phone,root}){
  const count=phone?40:100,positions=new Float32Array(count*3),seeds=[];
  for(let i=0;i<count;i++){const seed={x:L.bounds.x0-12+(i*.61803398875%1)*(span+24),y:(i*.41421356237%1)*30,z:-3-(i*.73205080757%1)*18,speed:.2+(i%5)*.09};seeds.push(seed);positions.set([seed.x,seed.y,seed.z],i*3);}
  const dustGeo=new THREE.BufferGeometry();dustGeo.setAttribute('position',new THREE.BufferAttribute(positions,3));const dust=new THREE.Points(dustGeo,new THREE.PointsMaterial({color:forest?'#e8db9b':campus?'#d8a166':'#fff9ee',size:forest?.065:campus?.1:.075,sizeAttenuation:true,transparent:true,opacity:forest?.55:.75,depthWrite:false}));attach(dust);animated.push(dust);
- // Decorative lobby climbers use the existing character model, never simulated players.
+ const details=addWorldDetails(L,{root,mesh,puff,box,mat,phone});animated.push(...details.animated);
+ // Each biome has its own staged, non-physical lobby scene using the same climber model.
  const hero=new THREE.Group(),actors=phone?[]:['#42b7ad','#e99478'].map(createAlpineCharacter);
- hero.position.set(L.biome==='campus'?15.5:13,L.biome==='campus'?8.8:9,4);hero.scale.setScalar(1.9);actors.forEach(a=>hero.add(a.root));
- const cord=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,14,8),mat('#d9b981'));cord.position.set(-.4,7.75,0);hero.add(cord);
- function pose(t){actors.forEach((a,i)=>{const x=i*.85+Math.sin(t*.7+i)*.035,y=-i*1.6+Math.sin(t*.8+i)*.055;a.pose({x,y,z:0,air:false,hands:[{x:i?.6:-.4,y:i?-.4:.85,z:0,ex:x-.4,ey:y+.4,grip:true,closed:true},{x:x+.6,y:y-.35,z:0,ex:x+.6,ey:y+.05,closed:false}],legs:[{kx:x-.25,ky:y-.5,fx:x-.4,fy:y-.76},{kx:x+.3,ky:y-.5,fx:x+.45,fy:y-.72}]},1/60,t);});}
+ hero.userData.vignette=campus?'rooftop-wave':forest?'branch-rescue':'rope-climb';
+ hero.position.set(campus?15.5:13,campus?6.3:forest?7.85:9,4);hero.scale.setScalar(1.9);actors.forEach(a=>hero.add(a.root));
+ let cord=null;if(!phone&&!forest&&!campus){cord=new THREE.Mesh(new THREE.CylinderGeometry(.025,.025,14,8),mat('#d9b981'));cord.name='lobby-rope';cord.position.set(-.4,7.75,0);hero.add(cord);}
+ const stage=new THREE.Group();
+ const prop=(geometry,color,position)=>{const m=new THREE.Mesh(geometry,mat(color));m.position.set(...position);m.castShadow=m.receiveShadow=true;stage.add(m);return m;};
+ if(!phone&&forest){
+  stage.name='lobby-perch';const branch=prop(new THREE.CylinderGeometry(.22,.24,1.7,16),'#9d805f',[.35,-1.02,0]);branch.rotation.z=Math.PI/2;
+  const stem=prop(new THREE.CylinderGeometry(.2,.24,2.1,12),'#9d805f',[.35,-1.03,-.9]);stem.rotation.x=Math.PI/2;
+  for(let i=0;i<5;i++){const moss=prop(new THREE.SphereGeometry(1,10,8),'#a6bf82',[-.25+i*.3,-.82,-.08]);moss.scale.set(.21,.04,.17);}
+  hero.add(stage);
+ }else if(!phone&&campus){
+  stage.name='lobby-balcony';prop(new THREE.BoxGeometry(2.5,.18,2.4),'#e3d0ad',[.4,-.96,-.8]);
+  prop(new THREE.BoxGeometry(2.65,.07,2.5),'#f2e4c7',[.4,-.865,-.8]);
+  for(const x of [-.7,.4,1.5])prop(new THREE.CylinderGeometry(.028,.028,.7,8),'#61777b',[x,-.5,-1.85]);
+  prop(new THREE.BoxGeometry(2.3,.045,.045),'#61777b',[.4,-.15,-1.85]);hero.add(stage);
+ }
+ const hand=(x,y,ex,ey,grip=false)=>({x,y,z:0,ex,ey,grip,closed:grip});
+ const legs=(x,y,standing=false)=>[-1,1].map(side=>({kx:x+side*.22,ky:y-.43,fx:x+side*(standing?.16:.35),fy:standing?-.76:y-.76}));
+ function pose(t){
+  if(forest){
+   const joint={x:-.28+Math.sin(t*.8)*.035,y:-.42+Math.sin(t*.9)*.045},x=.35,y=Math.sin(t*.8)*.025;
+   actors[0]?.pose({x,y,z:0,air:false,hands:[hand(joint.x,joint.y,-.05,-.15,true),hand(.96,.15,.8,.05)],legs:legs(x,y,true)},1/60,t);
+   const bx=-.72+Math.sin(t*.8)*.035,by=-1.22+Math.sin(t*.9)*.045;
+   actors[1]?.pose({x:bx,y:by,z:0,air:false,hands:[hand(bx-.5,by-.15,bx-.4,by+.1),hand(joint.x,joint.y,bx+.32,by+.44,true)],legs:legs(bx,by)},1/60,t);
+  }else if(campus){
+   actors.forEach((actor,i)=>{const x=i?1:-.25,y=Math.sin(t*.9+i)*.02;
+    actor.pose({x,y,z:0,air:false,hands:i?[hand(.22,.35,.55,.3),hand(1.45,-.25,1.4,.05)]:[hand(-.85+Math.sin(t*3)*.16,.83,-.68,.43),hand(.22,-.25,.18,.05)],legs:legs(x,y,true)},1/60,t);
+   });
+  }else actors.forEach((actor,i)=>{const x=i*.85+Math.sin(t*.7+i)*.035,y=-i*1.6+Math.sin(t*.8+i)*.055;actor.pose({x,y,z:0,air:false,hands:[hand(i?.6:-.4,i?-.4:.85,x-.4,y+.4,true),hand(x+.6,y-.35,x+.6,y+.05)],legs:legs(x,y)},1/60,t);});
+ }
  pose(0);let frozen=false,lastTime=null,elapsed=0;
  return {sky,hero,activate(){animated.forEach(o=>{o.matrixAutoUpdate=true;});},update(time,{reduced,lobby}){
   if(!reduced&&lastTime!==null)elapsed+=Math.min(.1,Math.max(0,time-lastTime))*(lobby?1:.3);lastTime=time;
   const t=elapsed,amount=1;
-  for(const {root,x,phase}of clouds)root.position.x=x+Math.sin(t*.035+phase)*3*amount;
+  for(const {root,x,phase}of clouds)root.position.x=x+Math.sin(t*.06+phase)*3*amount;
   for(const {root,phase,amplitude}of sways)root.rotation.z=Math.sin(t*.65+phase)*amplitude*amount;
   dust.visible=!reduced;const p=dustGeo.attributes.position;if(!reduced){for(let i=0;i<count;i++){const seed=seeds[i];p.setXYZ(i,seed.x+Math.sin(t*.25+i)*.35,30-((30-seed.y+t*seed.speed*amount)%30),seed.z);}p.needsUpdate=true;}
-  hero.visible=lobby;if(lobby){if(!reduced||!frozen)pose(t);frozen=reduced;}else frozen=false;
- },dispose(){sky.dispose();actors.forEach(a=>a.dispose());cord.geometry.dispose();cord.material.dispose();}};
+  details.update(t);hero.visible=lobby;if(lobby){if(!reduced||!frozen)pose(t);frozen=reduced;}else frozen=false;
+ },dispose(){sky.dispose();actors.forEach(a=>a.dispose());cord?.geometry.dispose();cord?.material.dispose();const geos=new Set(),mats=new Set();stage.traverse(o=>{if(o.geometry)geos.add(o.geometry);if(o.material)mats.add(o.material);});geos.forEach(g=>g.dispose());mats.forEach(m=>m.dispose());}};
 }
