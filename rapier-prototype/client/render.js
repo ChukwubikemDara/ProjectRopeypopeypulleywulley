@@ -53,8 +53,8 @@ function build(L){
  document.querySelector('.lab-title span')?.replaceChildren(document.createTextNode(L.kind==='practice'?'TETHERED / PROLOGUE':'TETHERED / '+({forest:'FOREST',campus:'OLD MAIN'}[L.biome]||'SNOWBOUND')));
  document.querySelector('.lab-title h1')?.replaceChildren(document.createTextNode(L.kind==='practice'?'Two people required.':({forest:'Branch management.',campus:'Old Main. New heights.'}[L.biome]||'The long way through.')));
  document.querySelector('.lab-title p')?.replaceChildren(document.createTextNode(L.kind==='practice'?'Two of you. One body. Listen to the narrator.':'Two phones. One climber. Make it to the flag.'));
- for(const t of L.terrain.filter(t=>(L.biome==='snow'||t.kind!=='boundary')&&t.kind!=='barrier'))prism(t.pts,L.depth,t.kind==='pipe'?metal:t.kind==='crate'?rust:t.kind==='roof'&&L.biome==='campus'?rock:t.kind==='ridge'||t.kind==='roof'?dark:t.kind==='bark'?wood:t.kind==='grass'||t.kind==='moss'?snow:rock);
- for(const t of L.terrain.filter(t=>t.kind==='roof'&&L.biome==='campus')){const [a,b]=t.pts.slice(2);prism([[a[0],a[1]-.18],[b[0],b[1]-.18],b,a],L.depth+.04,dark);}
+ for(const t of L.terrain.filter(t=>(L.biome==='snow'||t.kind!=='boundary')&&t.kind!=='barrier'))prism(t.pts,L.depth,t.kind==='pipe'?metal:t.kind==='crate'?rust:t.kind==='roof'&&L.biome==='campus'?[rock,dark]:t.kind==='ridge'||t.kind==='roof'?dark:t.kind==='bark'?wood:t.kind==='grass'||t.kind==='moss'?snow:rock);
+ // One extrusion per roof: cream front/back faces and dark edge faces, without coplanar skins.
  if(L.pipe){
  const P=L.pipe,R=P.gap/2+P.slab/2,angle=Math.atan2(P.dir[1],P.dir[0]);
  // Open shell reveals the physical course. Its floor and roof match the source data.
