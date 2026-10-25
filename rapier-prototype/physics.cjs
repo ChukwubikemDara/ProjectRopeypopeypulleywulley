@@ -45,7 +45,7 @@ class Simulation {
       this.holdShapes.set(collider.handle,h);h.collider=collider;
     }
     for(const data of definition.objects){
-      const body=this.world.createRigidBody((data.kind==='dummy'?R.RigidBodyDesc.dynamic().enabledTranslations(true,true,false).setLinearDamping(2).setAngularDamping(3).setCcdEnabled(true):R.RigidBodyDesc.kinematicPositionBased()).setTranslation(data.x0,data.y,0));
+      const body=this.world.createRigidBody((data.kind==='dummy'?R.RigidBodyDesc.dynamic().enabledTranslations(true,true,false).setLinearDamping(2).setAngularDamping(3).setCcdEnabled(true):R.RigidBodyDesc.kinematicPositionBased()).setTranslation(data.kind==='scooter'?data.x1:data.x0,data.y,0));
       const collider=this.world.createCollider((data.kind==='dummy'?R.ColliderDesc.capsule(.2,.3).setMass(2).setCollisionGroups((2<<16)|19):R.ColliderDesc.cuboid(data.w/2,data.h/2,1.2).setCollisionGroups((1<<16)|22)).setFriction(.9),body);
       const o={...data,body,collider,direction:1};this.objects.push(o);
       for(const h of this.holds)if(h.objectId===o.id)h.body=body;
@@ -107,7 +107,7 @@ class Simulation {
     }return false;
   }
   remove(id){const c=this.climbers.get(id);if(!c)return;for(const o of this.climbers.values())for(const h of o.hands)if(h.grip?.kind==='climber'&&h.grip.id===id)this.release(h,'left');for(const h of c.hands){this.release(h,'left');this.world.removeRigidBody(h.body);}for(const f of c.feet){this.footStates.delete(f.collider.handle);this.owners.delete(f.collider.handle);this.world.removeRigidBody(f.body);}for(const [handle,owner]of this.owners)if(owner===id)this.owners.delete(handle);this.world.removeRigidBody(c.body);this.climbers.delete(id);}
-  reset(){for(const id of [...this.climbers.keys()])this.remove(id);this.events.length=0;for(const h of this.holds){h.loadMs=0;h.brokenUntil=0;h.collider?.setEnabled(true);}for(const o of this.objects){o.direction=1;o.body.setTranslation(V(o.x0,o.y,0),true);if(o.kind!=='dummy')o.body.setNextKinematicTranslation(V(o.x0,o.y,0));else{o.body.setLinvel(V(),true);o.body.setAngvel(V(),true);o.body.setRotation({x:0,y:0,z:0,w:1},true);}}this.world.step(this.contactEvents,this.hooks);}
+  reset(){for(const id of [...this.climbers.keys()])this.remove(id);this.events.length=0;for(const h of this.holds){h.loadMs=0;h.brokenUntil=0;h.collider?.setEnabled(true);}for(const o of this.objects){o.direction=1;o.state=undefined;o.readyAt=0;const home=o.kind==='scooter'?o.x1:o.x0;o.body.setTranslation(V(home,o.y,0),true);if(o.kind!=='dummy')o.body.setNextKinematicTranslation(V(home,o.y,0));else{o.body.setLinvel(V(),true);o.body.setAngvel(V(),true);o.body.setRotation({x:0,y:0,z:0,w:1},true);}}this.world.step(this.contactEvents,this.hooks);}
   tune(key,value){this.config[key]=value;if(key==='gravity')this.world.gravity=V(0,-value,0);}
   dynamicState(){return{objects:this.objects.map(o=>({id:o.id,...o.body.translation(),rotation:o.body.rotation()})),broken:this.holds.filter(h=>h.brokenUntil>this.time).map(h=>h.id),strain:this.holds.filter(h=>h.breakMs&&h.loadMs>0).map(h=>[h.id,h.loadMs/h.breakMs])};}
   results(winner){const list=[...this.climbers.values()],out=winner?[{title:'King of the Mountain',id:winner,val:'summit'}]:[];for(const [key,title]of Object.entries({combos:'In Sync',kicks:'Kickboxer',drops:'Backstabber',pushes:'Leg Day',boosts:'Stepping Stool',biggestFall:'Biggest Fall'})){const top=list.slice().sort((a,b)=>b.stats[key]-a.stats[key])[0];if(top?.stats[key]>0)out.push({title,id:top.id,val:key==='biggestFall'?Math.round(top.stats[key])+'m':top.stats[key]});}return out;}
@@ -288,8 +288,21 @@ class Simulation {
     }
   }
   moveObjects(){
-    for(const o of this.objects){const p=o.body.translation();if(o.kind==='dummy'){o.body.resetForces(true);o.body.resetTorques(true);if(p.y<this.floorY||Math.abs(p.x-o.x0)>3){o.body.setTranslation(V(o.x0,o.y,0),true);o.body.setLinvel(V(),true);}const up=rotate(V(0,1,0),o.body.rotation());o.body.addTorque(sub(mul(cross(up,V(0,1,0)),8),mul(o.body.angvel(),1)),true);continue;}if(p.x>=o.x1)o.direction=-1;else if(p.x<=o.x0)o.direction=1;o.body.setNextKinematicTranslation(V(clamp(p.x+o.speed*o.direction*this.world.timestep,o.x0,o.x1),o.y,0));}
+    for(const o of this.objects){const p=o.body.translation();if(o.kind==='dummy'){o.body.resetForces(true);o.body.resetTorques(true);if(p.y<this.floorY||Math.abs(p.x-o.x0)>3){o.body.setTranslation(V(o.x0,o.y,0),true);o.body.setLinvel(V(),true);}const up=rotate(V(0,1,0),o.body.rotation());o.body.addTorque(sub(mul(cross(up,V(0,1,0)),8),mul(o.body.angvel(),1)),true);continue;}if(o.kind==='scooter'){this.ambush(o,p);continue;}if(p.x>=o.x1-1e-3)o.direction=-1;else if(p.x<=o.x0+1e-3)o.direction=1; // positions are 32-bit: 45.3 comes back as 45.29999
+o.body.setNextKinematicTranslation(V(clamp(p.x+o.speed*o.direction*this.world.timestep,o.x0,o.x1),o.y,0));}
     for(const h of this.holds)if(h.objectId){const o=this.objects.find(o=>o.id===h.objectId),p=o.body.translation();h.x=p.x+h.local.x;h.y=p.y+h.local.y;}
+  }
+  // The scooter waits at its far end (x1). When someone reaches its roof it launches after `delay` seconds, dashes to
+  // x0 at `dash` m/s (only the dash flings people), pauses, rolls back slowly and rests before it can go again.
+  ambush(o,p){
+    const dt=this.world.timestep;o.state??='parked';
+    if(o.state==='parked'&&this.time>=(o.readyAt??0)&&[...this.climbers.values()].some(c=>{const q=c.body.translation();return q.x>o.triggerX&&q.x<o.x1-.9&&q.y>o.triggerY;})){o.state='armed';o.goAt=this.time+o.delay;}
+    if(o.state==='armed'&&this.time>=o.goAt){o.state='dash';this.events.push({type:'scooter',id:o.id});}
+    if(o.state==='pause'&&this.time>=o.backAt)o.state='return';
+    let x=p.x+(o.state==='dash'?-o.dash:o.state==='return'?o.speed:0)*dt;
+    if(o.state==='dash'&&x<=o.x0+1e-3){x=o.x0;o.state='pause';o.backAt=this.time+o.pause;}
+    if(o.state==='return'&&x>=o.x1-1e-3){x=o.x1;o.state='parked';o.readyAt=this.time+o.rest;}
+    o.direction=o.state==='dash'?-1:1;o.body.setNextKinematicTranslation(V(clamp(x,o.x0,o.x1),o.y,0));
   }
   strainTwigs(){
     const dt=this.world.timestep;
@@ -303,7 +316,11 @@ class Simulation {
   }
   bonk(c){
     if(this.time<(c.cdBonk||0))return;
-    for(const o of this.objects){if(o.kind==='dummy')continue;let touching=false;this.world.contactPair(c.collider,o.collider,m=>{if(m.numSolverContacts()>0)touching=true;});if(!touching)continue;const away=Math.sign(c.body.translation().x-o.body.translation().x)||o.direction;for(const b of this.parts(c))b.setLinvel(add(b.linvel(),V(away*4.5,3.5,0)),true);c.cdBonk=this.time+.8;this.events.push({type:'bonk',id:c.id});break;}
+    for(const o of this.objects){if(o.kind==='dummy')continue;
+      // riders don't get knocked off: hanging from its rails, or standing on its roof
+      if(c.hands.some(h=>h.grip?.hold?.objectId===o.id)||c.body.translation().y>o.body.translation().y+o.h/2)continue;
+      if(o.kind==='scooter'&&o.state!=='dash')continue; // the scooter only flings while it's dashing
+      let touching=false;this.world.contactPair(c.collider,o.collider,m=>{if(m.numSolverContacts()>0)touching=true;});if(!touching)continue;const away=Math.sign(c.body.translation().x-o.body.translation().x)||o.direction;const [fx,fy]=o.fling||[4.5,3.5];for(const b of this.parts(c))b.setLinvel(add(b.linvel(),V(away*fx,fy,0)),true);c.cdBonk=this.time+.8;this.events.push({type:'bonk',id:c.id,by:o.id});break;}
   }
   carryStep(c){
     const dt=this.world.timestep,n=c.hands.filter(h=>h.grip).length,feet=this.grounded(c);
