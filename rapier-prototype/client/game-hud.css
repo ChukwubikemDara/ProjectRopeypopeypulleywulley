@@ -98,3 +98,14 @@
    manipulation keeps scrolling in the lobby panels; the hand pads and touch aim pad take every touch themselves. */
 .phone,.phone *{touch-action:manipulation}
 .phone .pad,.phone .touch-aim-pad,.phone .aimpad{touch-action:none}
+
+/* Remote mode (the default): no 3D view on the phone, just a calm controller screen */
+.phone.remote #game{display:none}
+.phone.remote{background:radial-gradient(120% 80% at 50% 30%,#d9eef2 0%,#bcd9e3 55%,#9fc4d2 100%)}
+.phone .remote-stage{position:absolute;left:0;right:0;top:44%;transform:translateY(-50%);display:grid;justify-items:center;gap:6px;pointer-events:none;text-align:center}
+.phone .remote-stage b{font-family:var(--game);font-weight:400;font-size:clamp(44px,14vw,72px);letter-spacing:2px;color:#fff;-webkit-text-stroke:5px var(--ink);paint-order:stroke fill;text-shadow:0 6px 0 var(--ink)}
+.phone .remote-stage[data-role=arms] b{color:var(--coral)}
+.phone .remote-stage[data-role=legs] b{color:var(--teal)}
+.phone .remote-stage span{font-family:var(--chunk);font-weight:900;font-size:15px;color:var(--ink);opacity:.7}
+.phone:not(.remote) .remote-stage{display:none}
+.phone .remote-option{margin:6px 0}

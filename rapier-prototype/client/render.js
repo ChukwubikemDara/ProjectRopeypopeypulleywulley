@@ -227,7 +227,7 @@ window.LabSetView=view=>{
 };
 window.LabSetView(Net.phase==='playing'?'follow':isLobby()?'menu':'overview');
 Net.on('phase',p=>{if(!phone)window.LabSetView(p==='playing'?'follow':p==='results'?'overview':'menu');});
-let previous=performance.now();
+let previous=performance.now(),followDistance=null;
 const SUN_OFFSET=new THREE.Vector3(-9,30,18),shadowToLight=new THREE.Matrix4().lookAt(SUN_OFFSET,new THREE.Vector3(),new THREE.Vector3(0,1,0)),lightToShadow=shadowToLight.clone().invert(),tempV=new THREE.Vector3();
 renderer.setAnimationLoop(now=>{
  adaptQuality(now);const scenicLobby=!phone&&isLobby()&&window.LabView==='menu';
@@ -264,8 +264,11 @@ renderer.setAnimationLoop(now=>{
  }else if(window.LabView==='follow'&&s?.climbers.length){
   controls.enabled=true;
   const cs=s.climbers,xs=cs.map(c=>c.x),ys=cs.map(c=>c.y);const center=new THREE.Vector3((Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2+.8,0);
-  const spreadX=Math.max(...xs)-Math.min(...xs)+9,spreadY=Math.max(...ys)-Math.min(...ys)+6,tan=Math.tan(THREE.MathUtils.degToRad(camera.fov/2));const d=Math.max(12,spreadX/(2*tan*camera.aspect),spreadY/(2*tan));
-  controls.target.lerp(center,1-Math.exp(-dt*3));camera.position.lerp(center.clone().add(new THREE.Vector3(3,4,d)),1-Math.exp(-dt*3));controls.update();
+  // Keep every climber in the shot: zoom out quickly when someone falls behind or races ahead, and back in slowly
+  // once the pack regroups (so the view doesn't pump). The margins keep people clear of the cards at the screen edges.
+  const spreadX=Math.max(...xs)-Math.min(...xs)+11,spreadY=Math.max(...ys)-Math.min(...ys)+8,tan=Math.tan(THREE.MathUtils.degToRad(camera.fov/2));const d=Math.max(12,spreadX/(2*tan*camera.aspect),spreadY/(2*tan));
+  followDistance??=d;followDistance+=(d-followDistance)*(1-Math.exp(-dt*(d>followDistance?5:.9)));
+  controls.target.lerp(center,1-Math.exp(-dt*3));camera.position.lerp(center.clone().add(new THREE.Vector3(3,4,followDistance)),1-Math.exp(-dt*4));controls.update();
  }else if(controls){controls.enabled=true;if(window.LabView==='follow'){window.LabSetView('overview');window.LabView='follow';}controls.update();}
  ambience?.update(now/1000,{reduced:reducedMotion.matches,lobby:!phone&&isLobby()&&window.LabView==='menu'});
  if(flag&&!reducedMotion.matches){const p=flag.geometry.attributes.position,base=flag.userData.base;for(let i=0;i<p.count;i++){const x=base[i*3]+.5;p.setZ(i,Math.sin(now/220-x*4)*.12*x);}p.needsUpdate=true;flag.geometry.computeVertexNormals();}
