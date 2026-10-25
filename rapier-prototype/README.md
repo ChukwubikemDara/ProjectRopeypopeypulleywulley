@@ -34,6 +34,10 @@ The next detail pass gives Snowbound its rope-climbing vignette, Forest a helpin
 
 Additional tests: `menu-check.cjs` verifies focus, host permissions and results navigation; `ambience-check.cjs` uses real Three.js objects to verify animation, reduced motion, phone limits, lobby-only actors and sky cleanup. The existing physics/multiplayer suite remains required.
 
+## Recorded narration and control guides
+
+The integrated `prologue-voice` work supplies all 21 narration recordings, their durations, more breathing room between lines, and one shared audio element for Safari unlocking. Phones remain voice-off until opted in. The new animated how-to-play card is role-specific and replayable from settings; touch users see drag/button instructions, while motion users see tilt/flick instructions. Browser autoplay policy and listening quality still require a physical Safari check. Existing scenery, the motion-mode Kick button and the campus roof-surface fix are preserved.
+
 ## Phone controls update (milestone 1)
 
 Motion remains primary. LEGS and solo players always have a Kick button. Jump and Tuck buttons appear in touch mode. ARMS never see or send leg actions. Buttons and motion share the existing gesture path, server role checks, cooldowns and a short client lockout, preventing a tap/jostle double trigger.

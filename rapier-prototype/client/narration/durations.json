@@ -1,0 +1,23 @@
+{
+ "beam": 6.74,
+ "combo": 7.03,
+ "early": 4.52,
+ "fall-again": 5.22,
+ "fall-big": 3.63,
+ "fall-first": 5.17,
+ "fall-opposite": 3.87,
+ "fall-same": 7.29,
+ "fall-start": 5.93,
+ "gap": 5.83,
+ "kick-wait": 6.22,
+ "ledge": 11.13,
+ "no-falls": 6.43,
+ "nobody-else": 5.83,
+ "other-two": 9.43,
+ "release": 6.22,
+ "roles": 7.68,
+ "stall": 5.67,
+ "stand-up": 2.17,
+ "trust": 10.27,
+ "wake": 16.38
+}

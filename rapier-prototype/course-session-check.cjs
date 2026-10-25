@@ -23,7 +23,7 @@ function place(sim,c,x,y){for(const h of c.hands)sim.release(h,'test setup');for
   host.emit('practice');await wait(100);assert.equal(state.mode,'practice');assert.equal(state.courseId,'practice');assert.equal(game.players.get(arms.id).team,team);let c=game.sim.climbers.get(team);
   assert.equal(c.slumped,true,'the prologue starts with the body slumped under the sign');
   heartbeat=setInterval(()=>{arms.emit('input',{aim:0,ay:.6,l:false,r:false,brace:true});legs.emit('input',{aim:0,ay:.6,brace:true});},150);
-  await wait(2600);assert.equal(narrated[0]?.id,'wake');assert.ok(narrated[0].text.includes('\n')&&narrated[0].duration>5);assert.equal(narrated[0].audio,null);
+  await wait(2600);assert.equal(narrated[0]?.id,'wake');assert.ok(narrated[0].text.includes('\n')&&narrated[0].duration>5);assert.equal(narrated[0].audio,'/lab/narration/wake.mp3','the recorded line is sent');assert.ok(narrated[0].duration>15,'paced by the recording\'s real length');
   arms.emit('input',{aim:.8,ay:.6,l:false,r:false,brace:true});await wait(60);assert.equal(c.slumped,true,'the arms tilting does not stand the body up');
   legs.emit('input',{aim:.6,ay:.6,brace:true});await wait(60);assert.equal(c.slumped,false,'the legs leaning stands it up');
   console.log('PASS the prologue wakes up slumped, the narrator speaks to every device, and the legs stand the body up');
