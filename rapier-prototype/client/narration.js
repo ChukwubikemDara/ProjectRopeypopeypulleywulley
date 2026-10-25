@@ -20,9 +20,20 @@
  const back=make('button','narration-back','↺ Section start');back.type='button';back.hidden=true;back.onclick=()=>Net.socket.emit('practiceReset');
  if(phone)document.body.append(back);
 
- const queue=[];let playing=null,sound=null,timer=null;
- function stopSound(){if(sound){sound.onended=sound.onerror=null;sound.pause();sound=null;}if(canSpeak)synth.cancel();}
- function finish(){clearTimeout(timer);playing=null;bar.classList.remove('show');timer=setTimeout(next,350);}
+ const queue=[];let playing=null,sound=null,timer=null,retry=null;
+ // One audio element for every line. Safari (Mac and iPhone) only lets an element play sound once a click or
+ // tap has started it; a fresh element per line got the first line through and silently blocked the rest.
+ // The first click/tap/key anywhere unlocks this element (and the speech voice) for the whole session.
+ const player=new Audio();player.preload='auto';let unlocked=false;
+ function unlock(){
+  if(unlocked)return;unlocked=true;
+  if(!sound){player.muted=true;player.src='/lab/narration/_unlock.mp3';const p=player.play();if(p?.then)p.then(()=>{player.pause();player.muted=false;if(retry)retry();},()=>{player.muted=false;unlocked=false;});else player.muted=false;}
+  if(canSpeak&&!synth.speaking)try{const u=new SpeechSynthesisUtterance('');u.volume=0;synth.speak(u);}catch{}
+  if(toggle.classList.contains('needs-tap')){toggle.classList.remove('needs-tap');label();}
+ }
+ for(const type of ['pointerdown','click','touchend','keydown'])document.addEventListener(type,unlock,{capture:true});
+ function stopSound(){if(sound){player.onended=player.onerror=null;player.pause();sound=null;}retry=null;if(canSpeak)synth.cancel();}
+ function finish(){clearTimeout(timer);playing=null;retry=null;bar.classList.remove('show');timer=setTimeout(next,350);}
  function speak(line,done){
   if(!canSpeak)return done(false);
   const u=new SpeechSynthesisUtterance(line.text);u.lang='en-US';u.rate=.95;u.pitch=.9;u.onend=()=>done(true);u.onerror=e=>{if(e?.error==='not-allowed')blocked();done(false);};synth.cancel();synth.speak(u);
@@ -39,8 +50,15 @@
   setTimeout(()=>{minDone=true;maybeFinish();},Math.max(1500,(line.duration||3)*1000));
   if(soundDone)return;
   const fallback=()=>speak(line,()=>{soundDone=true;maybeFinish();});
-  if(line.audio){sound=new Audio(line.audio);sound.onended=()=>{sound=null;soundDone=true;maybeFinish();};sound.onerror=()=>{sound=null;fallback();};sound.play().catch(err=>{sound=null;if(err?.name==='NotAllowedError')blocked();fallback();});}
-  else fallback();
+  const done=()=>{sound=null;retry=null;soundDone=true;maybeFinish();};
+  const playRecording=()=>{
+   sound=line;player.onended=done;player.onerror=()=>{sound=null;fallback();};player.src=line.audio;
+   const p=player.play();if(p?.catch)p.catch(err=>{sound=null;
+    // blocked: show the hint, and play this line as soon as someone clicks; meanwhile the caption carries on
+    if(err?.name==='NotAllowedError'){blocked();unlocked=false;soundDone=true;maybeFinish();retry=()=>{retry=null;if(playing===line){soundDone=false;playRecording();}};}
+    else fallback();});
+  };
+  if(line.audio)playRecording();else fallback();
  }
  // `keepEssential`: the release line finishes even though the race map loads right after it
  function clear(keepEssential){queue.length=0;if(keepEssential&&playing?.essential)return;stopSound();clearTimeout(timer);playing=null;bar.classList.remove('show');bar.hidden=true;}
@@ -55,16 +73,8 @@
  Net.on('phase',p=>{if(p!=='playing')clear(false);});
  // browsers block sound until the page is touched: say so on the big screen, and unlock on the first click
  function blocked(){if(!phone&&voiced){toggle.textContent='🔇 Click for sound';toggle.classList.add('needs-tap');}}
- document.addEventListener('pointerdown',()=>{if(toggle.classList.contains('needs-tap')){toggle.classList.remove('needs-tap');label();}},{capture:true});
+
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState!=='visible')stopSound();});
  setInterval(()=>{const prologue=Net.level?.kind==='practice'&&Net.phase==='playing';document.body.classList.toggle('practice-mode',prologue);back.hidden=!phone||!prologue||!Net.calibrated;},250);
- // Waking up in the prologue: each phone gets a big card saying which half of the body it is.
- const card=make('div','role-card-flash');card.hidden=true;card.setAttribute('role','status');const cardRole=make('b'),cardHow=make('small');card.append(make('span',null,'YOU ARE THE'),cardRole,cardHow);
- if(phone)document.body.append(card);let cardFor=null;
- setInterval(()=>{if(!phone)return;const prologue=Net.level?.kind==='practice'&&Net.phase==='playing'&&Net.calibrated;
-  if(prologue&&cardFor!==Net.level.revision){cardFor=Net.level.revision;const role=Net.role||'both';
-   cardRole.textContent={arms:'ARMS',legs:'LEGS',both:'ARMS + LEGS'}[role];cardHow.textContent={arms:'Tilt to reach. Hold a pad to grab.',legs:'Lean to swing. Hop to jump.',both:'Tilt, grab and hop. All of it. Alone.'}[role];
-   card.dataset.role=role;card.hidden=false;setTimeout(()=>{card.hidden=true;},6000);}
-  if(!prologue)card.hidden=true;},250);
- window.Narration={get voiced(){return voiced;},get playing(){return playing;},queue};
+ window.Narration={get voiced(){return voiced;},get playing(){return playing;},queue,player};
 })();
